@@ -442,6 +442,7 @@ GameObject:
   m_Component:
   - component: {fileID: 950000002}
   - component: {fileID: 950000003}
+  - component: {fileID: 950000004}
   m_Layer: 0
   m_Name: Game Session
   m_TagString: Untagged
@@ -480,3 +481,20 @@ MonoBehaviour:
   playerStart: {x: 0, y: 0.7, z: 0}
   cameraHeight: 8
   cameraZOffset: -10
+--- !u!114 &950000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 950000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67bc61e62eee4055ad25171687bbe49a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  initialRunSpeed: 5
+  speedIncreasePerMeter: 0.025
+  maximumRunSpeed: 12
+  speedChangePerSecond: 1.5
+  pointsPerMeter: 1
