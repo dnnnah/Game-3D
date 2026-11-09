@@ -1,52 +1,49 @@
-# Plan: corregir el proyecto a Helix Jump vertical
+# Plan: Actividad 3 — generación continua y bucle de partida
 
-## Objetivo y alcance
+## Objetivo
 
-Reemplazar el corredor horizontal actual por un prototipo jugable que se parezca a la referencia: columna central blanca, pisos circulares oscuros segmentados con huecos y acentos amarillos, balón rojo, control táctil horizontal de la torre y encuadre Portrait. El balón rebota y desciende por Y; la cámara sigue su altura manteniendo X/Z.
+Implementar en la rama `actividad-3-niveles-procedurales` una torre Helix continua con dificultad ajustable y un ciclo de partida que termine al tocar un sector rojo y permita reintentar. El plan sigue el mapa y las especificaciones aprobadas:
 
-La actividad 1 entrega la escena vertical base, la física, el control de torre, la cámara y la UI móvil inicial. La actividad 2 añade contador por pisos, curva de dificultad y récord con `PlayerPrefs`. La actividad 3 conserva niveles infinitos/procedurales y el ciclo de derrota/reinicio.
+- [Mapa de capacidades](../ACTIVITY-3-MODULES.md)
+- [level-stream](../docs/specs/SPEC-level-stream.md)
+- [difficulty-curve](../docs/specs/SPEC-difficulty-curve.md)
+- [run-lifecycle](../docs/specs/SPEC-run-lifecycle.md)
 
-## Arquitectura y orden
+## Orden y dependencias
 
-1. **`vertical-core`**: escena y torre finita construidas con piezas del prefab; balón con `Rigidbody`/`SphereCollider` y rebote; control táctil que gira la torre alrededor de Y; cámara con X/Z fijos que acompaña Y.
-2. **`floor-progression`**: recibe cada cruce de piso, incrementa contador, aumenta gradualmente la velocidad de descenso con un límite y persiste el récord.
-3. **`portrait-ui`**: fuerza orientación Portrait, conserva el área segura y conecta menú/HUD al marcador.
+| Fase | Capacidad | Resultado | Depende de |
+|---|---|---|---|
+| 1 | `level-stream` | Módulos de piso configurables y reserva acotada con reciclaje vertical. | — |
+| 2 | `difficulty-curve` | Curva de caída y sectores peligrosos limitados por datos del Inspector. | Eventos de piso de la fase 1. |
+| 3 | `run-lifecycle` | Estados de menú/partida/derrota y reintento completo sin recargar la escena. | Fases 1 y 2. |
+| 4 | Integración | Valores predeterminados guardados por el constructor de escena y en `Main.unity`. | Fases 1–3. |
+| 5 | Cierre | Compilación, revisión del diff, commits lógicos y PR contra `main`. | Fases 1–4. |
 
-Dependencias: `vertical-core` no depende de los otros módulos; `floor-progression` depende de `vertical-core`; `portrait-ui` depende de ambos.
+Las fases son secuenciales porque los peligros y el ciclo de partida consumen los módulos y eventos producidos por las fases anteriores. No hay trabajo de implementación independiente que convenga paralelizar.
 
-## Fases de implementación
+## Desglose de implementación
 
-### A. Corrección del núcleo (rama `correccion-helix-vertical`)
-
-- Crear una herramienta de Editor para componer y guardar la escena vertical con instancias del prefab, en vez de crear un corredor solo durante Play Mode.
-- Reemplazar desplazamiento X/Z del personaje por rebote y caída vertical del balón.
-- Incorporar giro de la torre por arrastre horizontal y cámara que sigue Y con X/Z constantes.
-- Configurar orientación y menú móvil en Portrait.
-- Compilar y revisar el diff; abrir el PR de corrección contra `main`.
-
-### B. Actualización de la actividad 2
-
-- Conectar cruces de pisos con contador y récord.
-- Cambiar la progresión actual basada en distancia Z por pisos descendidos y velocidad vertical progresiva con tope.
-- Actualizar README/producto y el PR #2 para que su diff contenga solo progreso vertical respecto a la corrección del núcleo.
-
-## Verificación por fase
-
-- `git diff --check` y revisión del diff de escena, referencias GUID y archivos de Unity.
-- Compilación de scripts con `dotnet restore Assembly-CSharp.csproj --ignore-failed-sources` y `dotnet build Assembly-CSharp.csproj --no-restore`.
-- Revisión manual en Unity 6000.6.0f1: abrir `Assets/Scenes/Main.unity`, confirmar la composición visible en Scene y probar rebote, giro, cámara, menú, contador y guardado en Play Mode.
-- No añadir pruebas automatizadas sin solicitud expresa. Si el Editor no inicia por el cliente de licencias, reportar la limitación y no declarar validación manual.
+1. **Modelar un piso modular.** Agrupar sectores y disparador en un módulo; actualizar su configuración y su altura de forma reutilizable. Mantener el hueco y los colliders de cada pieza.
+2. **Crear el generador acotado.** Construir el conjunto inicial desde los valores serializados y reciclar el piso ya atravesado debajo del más bajo. Notificar una sola vez cada cruce.
+3. **Conectar la progresión.** Usar el conteo existente para definir niveles de velocidad y límites de peligros. Los parámetros permanecen editables en el Inspector y no modifican la persistencia del récord.
+4. **Añadir sectores peligrosos.** Aplicar color rojo y detección de contacto al número de sectores permitido por la curva, manteniendo el hueco y al menos un sector seguro.
+5. **Integrar el ciclo de partida.** Añadir estados idempotentes, detener la simulación en derrota y reiniciar balón, torre, progreso y reserva al reintentar.
+6. **Actualizar la escena.** Conectar componentes y valores predeterminados en el constructor/editor y guardar la escena principal sin sustituir cambios locales no relacionados.
+7. **Cerrar la actividad.** Compilar ensamblados Runtime y Editor, ejecutar `git diff --check`, revisar referencias/archivos versionados, hacer commits convencionales menores a 400 líneas cuando sea práctico y preparar el PR de la actividad 3.
 
 ## Riesgos y mitigaciones
 
-- `HelixPartPrefab` es una sola pieza con `MeshCollider` no convexo. Mantener esa geometría como plataforma estática/kinemática y no convertirla en cuerpo dinámico.
-- Las instancias de sector pueden dejar huecos incorrectos si la orientación del FBX no coincide con el eje radial. Verificar orientación y escala en la escena antes de ajustar el diseño.
-- La orientación actual del proyecto es LandscapeRight. Cambiarla a Portrait y revisar que el CanvasScaler y el área segura sigan funcionando.
-- El PR #2 aún contiene la mecánica anterior por Z. Mantenerlo sin fusionar; ajustar su base a la corrección del núcleo sin force-push. Si GitHub no permite un diff limpio, crear una rama vertical de reemplazo y cerrar el PR obsoleto.
-- El paquete fuente `HelixPart.unitypackage` permanece fuera de Git; solo se versionan los recursos importados.
+- **Huecos o colisiones desalineados al reciclar:** conservar la geometría importada y reconfigurar el módulo completo, incluido su disparador; revisar `MeshCollider` tras mover el módulo.
+- **Dificultad que vuelva un piso imposible:** limitar sectores peligrosos a la capacidad disponible después de reservar el hueco y un sector normal.
+- **Callbacks duplicados:** hacer que el trigger y el cambio a `GameOver` sean idempotentes.
+- **Reinicio que borre el récord:** separar `BeginRun` del almacenamiento de mejor marca y conservar la clave actual de `PlayerPrefs`.
+- **Cambios locales de Unity:** antes de modificar `Main.unity` o materiales, inspeccionar sus diffs actuales y mantener los cambios ajenos a esta actividad fuera del commit.
+- **Licencias del Editor:** si Unity no abre por inicialización del cliente de licencias, limitar la validación reportada a compilación y revisión de archivos; no afirmar que hubo una comprobación en Play Mode.
 
-## Secuencia de ramas y PR
+## Criterios de cierre
 
-1. Completar la corrección de actividad 1 en `correccion-helix-vertical` y abrir un PR contra `main`.
-2. Sobre la corrección aprobada, actualizar la rama/PR de actividad 2 con puntuación por pisos y persistencia.
-3. Mantener commits lógicos con menos de 400 líneas cambiadas cada uno cuando sea práctico.
+- La cantidad activa de módulos queda acotada y configurable y siguen apareciendo pisos debajo del balón.
+- Cada piso incrementa progreso una sola vez; la velocidad y los peligros siguen los umbrales y topes del Inspector.
+- El contacto rojo detiene una sola vez la partida y muestra la interfaz de derrota.
+- Reintentar restaura balón, torre, progreso y distribución mientras conserva el récord.
+- La compilación y revisión del diff no muestran errores atribuibles a la actividad; la escena conserva los recursos importados y no versiona `HelixPart.unitypackage`.

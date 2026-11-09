@@ -89,8 +89,14 @@ public static class HelixSceneBuilder
             progression = controller.gameObject.AddComponent<GameProgression>();
         controller.SetProgression(progression);
 
+        ProceduralLevelGenerator generator = controller.GetComponent<ProceduralLevelGenerator>();
+        if (generator == null)
+            generator = controller.gameObject.AddComponent<ProceduralLevelGenerator>();
+        controller.SetProceduralLevelGenerator(generator);
+
         EditorUtility.SetDirty(controller);
         EditorUtility.SetDirty(progression);
+        EditorUtility.SetDirty(generator);
         CameraFollowY cameraFollow = Object.FindAnyObjectByType<CameraFollowY>();
         if (cameraFollow != null)
             EditorUtility.SetDirty(cameraFollow);
