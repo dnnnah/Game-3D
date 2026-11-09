@@ -9,6 +9,7 @@ public sealed class PlayerMovement : MonoBehaviour
 
     private Rigidbody body;
     private MobileInputController input;
+    private float automaticForwardSpeed;
     private bool movementEnabled;
     private bool groundedContact;
     private bool isGrounded;
@@ -41,6 +42,11 @@ public sealed class PlayerMovement : MonoBehaviour
         }
     }
 
+    public void SetAutomaticForwardSpeed(float speed)
+    {
+        automaticForwardSpeed = Mathf.Max(0f, speed);
+    }
+
     private void FixedUpdate()
     {
         isGrounded = groundedContact;
@@ -56,7 +62,7 @@ public sealed class PlayerMovement : MonoBehaviour
         Vector2 movement = Vector2.ClampMagnitude(input.Movement, 1f);
         Vector3 velocity = body.linearVelocity;
         velocity.x = movement.x * lateralSpeed;
-        velocity.z = movement.y * forwardSpeed;
+        velocity.z = automaticForwardSpeed + movement.y * forwardSpeed;
         body.linearVelocity = velocity;
 
         if (jumpRequested && isGrounded)
