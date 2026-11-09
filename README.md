@@ -22,15 +22,19 @@ Repositorio del videojuego tridimensional para la materia **Optativa: Diseño de
 
 ---
 
-## 🚀 Actividad 1: Fundamentos 3D y controles móviles
+## 🚀 Actividades
 
 ### Actividad 1: Fundamentos 3D y controles móviles
 
 - **Objetivo:** configurar la UI móvil, el movimiento tridimensional, las colisiones y una cámara que acompañe al personaje en X y Z conservando su separación en Z.
-- **Recursos:** modelo, material y prefab `HelixPart`.
-- **Objetivo:** UI táctil adaptable, movimiento en X/Y/Z, colisiones físicas y cámara que siga X/Z con una separación constante en Z.
 - **Recursos integrados:** modelo, material y prefab `HelixPart`.
 - **Navegación:** menú inicial y pantalla de juego dentro de la escena principal.
+- **Estado:** ✅ Completada mediante el PR #1
+
+### Actividad 2: Avance y progresión
+
+- **Objetivo:** mantener el avance fluido, aumentar la velocidad gradualmente y contabilizar la distancia recorrida.
+- **Persistencia:** el récord de distancia se guarda localmente mediante `PlayerPrefs`.
 - **Estado:** 🟡 Lista para revisión
 
 ---
