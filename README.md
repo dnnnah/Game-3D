@@ -38,12 +38,13 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 ### Actividad 3: Generación continua y bucle de juego
 
 - **Descripción:** generación procedural o modular continua de plataformas, dificultad progresiva configurable desde el Inspector y reinicio del flujo al perder.
-- **Estado:** PR #4 abierto para revisión en la rama `actividad-3-niveles-procedurales`.
+- **Estado:** Completada. El PR #4 está fusionado.
 
 ### Actividad 4: Iluminación y personalización visual
 
-- **Descripción:** configuración de iluminación ambiental y direccional, color del entorno y apariencia del personaje.
-- **Estado:** Pendiente.
+- **Descripción:** fondo configurable en ejecución, iluminación ambiental y direccional ajustable, bola personalizable y acento seguro rojo a juego con la bola.
+- **Especificación:** `docs/specs/SPEC-visual-management.md`.
+- **Estado:** PR #5 abierto para revisión en la rama `actividad-4-gestion-visual`.
 
 ### Actividad 5: Menús y transiciones entre niveles
 

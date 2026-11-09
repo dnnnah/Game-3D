@@ -68,7 +68,7 @@ public static class HelixSceneBuilder
         controller.SetScenePrefab(prefab);
         controller.SetVisualMaterials(
             LoadOrCreateMaterial("HelixDark.mat", new Color(0.035f, 0.045f, 0.055f)),
-            LoadOrCreateMaterial("HelixYellow.mat", new Color(1f, 0.78f, 0.08f)),
+            LoadOrCreateMaterial("HelixAccent.mat", new Color(0.92f, 0.04f, 0.035f)),
             LoadOrCreateMaterial("HelixColumn.mat", new Color(0.92f, 0.93f, 0.94f)),
             LoadOrCreateMaterial("HelixBall.mat", new Color(0.92f, 0.04f, 0.035f)),
             LoadOrCreateBounceMaterial());
