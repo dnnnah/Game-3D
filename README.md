@@ -38,7 +38,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 ### Actividad 3: Generación continua y bucle de juego
 
 - **Descripción:** generación procedural o modular continua de plataformas, dificultad progresiva configurable desde el Inspector y reinicio del flujo al perder.
-- **Estado:** Implementación en curso en la rama `actividad-3-niveles-procedurales`.
+- **Estado:** PR #4 abierto para revisión en la rama `actividad-3-niveles-procedurales`.
 
 ### Actividad 4: Iluminación y personalización visual
 

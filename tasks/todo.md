@@ -40,7 +40,7 @@ Especificación y mapa aprobados. La implementación está en curso en la rama `
   - Aceptación: el constructor/editor deja referencias y defaults válidos, y el Inspector permite cambiar parámetros sin editar código.
   - Verificar: compilar Runtime/Editor, revisar referencias de escena y `git diff --check`.
   - Archivos: `Assets/Editor/HelixSceneBuilder.cs`, `Assets/Scenes/Main.unity`.
-- [ ] Revisar cambios de Activity 3, crear commits lógicos y preparar el PR contra `main`.
+- [x] Revisar cambios de Activity 3, crear commits lógicos y preparar el PR contra `main`.
   - Aceptación: solo incluye archivos de Activity 3, cada commit se mantiene por debajo de 400 líneas cuando sea práctico y `HelixPart.unitypackage` queda fuera de Git.
   - Verificar: revisar `git status`, diffs y commits antes de abrir el PR.
   - Archivos: cambios de la actividad y documentación asociada.
