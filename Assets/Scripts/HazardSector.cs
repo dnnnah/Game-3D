@@ -14,31 +14,23 @@ public sealed class HazardSector : MonoBehaviour
     private bool isDangerous;
     private bool reportedThisContact;
 
-    private void Awake()
-    {
-        propertyBlock = new MaterialPropertyBlock();
-        sectorCollider = GetComponent<MeshCollider>();
-        sectorRenderer = GetComponentInChildren<Renderer>();
-    }
-
     public void Configure(bool dangerous, Color dangerColor, Action onHazardContact)
     {
-        if (propertyBlock == null)
-            propertyBlock = new MaterialPropertyBlock();
-        if (sectorCollider == null)
-            sectorCollider = GetComponent<MeshCollider>();
-        if (sectorRenderer == null)
-            sectorRenderer = GetComponentInChildren<Renderer>();
+        CacheComponents();
 
         isDangerous = dangerous;
         hazardCallback = onHazardContact;
         reportedThisContact = false;
 
         if (sectorCollider != null)
+        {
+            sectorCollider.enabled = true;
             sectorCollider.isTrigger = isDangerous;
+        }
 
         if (sectorRenderer != null)
         {
+            sectorRenderer.enabled = true;
             if (!isDangerous)
             {
                 sectorRenderer.SetPropertyBlock(null);
@@ -61,6 +53,8 @@ public sealed class HazardSector : MonoBehaviour
     private void OnTriggerEnter(Collider other) => TryReportHazard(other);
     private void OnTriggerStay(Collider other) => TryReportHazard(other);
 
+    private void Awake() => CacheComponents();
+
     private void TryReportHazard(Collider other)
     {
         if (!isDangerous || reportedThisContact)
@@ -70,6 +64,25 @@ public sealed class HazardSector : MonoBehaviour
             return;
 
         reportedThisContact = true;
+        isDangerous = false;
+        Vector3 impactPoint = sectorCollider != null
+            ? sectorCollider.ClosestPoint(other.transform.position)
+            : transform.position;
+        if (sectorCollider != null)
+            sectorCollider.enabled = false;
+        if (sectorRenderer != null)
+            sectorRenderer.enabled = false;
+        HelixParticleEffects.Burst(impactPoint, new Color(1f, 0.08f, 0.02f, 1f), 20, 1.5f, 3.2f, 0.14f);
         hazardCallback?.Invoke();
+    }
+
+    private void CacheComponents()
+    {
+        if (sectorCollider == null)
+            sectorCollider = GetComponent<MeshCollider>();
+        if (sectorRenderer == null)
+            sectorRenderer = GetComponentInChildren<Renderer>();
+        if (propertyBlock == null)
+            propertyBlock = new MaterialPropertyBlock();
     }
 }
