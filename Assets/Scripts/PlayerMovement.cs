@@ -4,11 +4,13 @@ using UnityEngine;
 public sealed class PlayerMovement : MonoBehaviour
 {
     [SerializeField, Min(0f)] private float initialDropSpeed = 1.5f;
-    [SerializeField, Min(0f)] private float bounceSpeed = 5.5f;
+    [SerializeField, Min(0f), Tooltip("Velocidad vertical fija que recibe la bola al aterrizar en un sector seguro.")]
+    private float bounceSpeed = 5.5f;
     [SerializeField, Min(0f)] private float maximumFallSpeed = 12f;
 
     private Rigidbody body;
     private bool movementEnabled;
+    private float verticalSpeedBeforePhysicsStep;
 
     public float VerticalSpeed => body != null ? body.linearVelocity.y : 0f;
 
@@ -36,7 +38,14 @@ public sealed class PlayerMovement : MonoBehaviour
 
         body.isKinematic = !enabled;
         if (enabled)
+        {
             body.linearVelocity = Vector3.down * initialDropSpeed;
+            verticalSpeedBeforePhysicsStep = -initialDropSpeed;
+        }
+        else
+        {
+            verticalSpeedBeforePhysicsStep = 0f;
+        }
     }
 
     public void SetMaximumFallSpeed(float speed)
@@ -55,6 +64,7 @@ public sealed class PlayerMovement : MonoBehaviour
 
         body.isKinematic = true;
         body.position = startPosition;
+        verticalSpeedBeforePhysicsStep = 0f;
     }
 
     private void FixedUpdate()
@@ -67,11 +77,12 @@ public sealed class PlayerMovement : MonoBehaviour
         velocity.z = 0f;
         velocity.y = Mathf.Max(velocity.y, -maximumFallSpeed);
         body.linearVelocity = velocity;
+        verticalSpeedBeforePhysicsStep = velocity.y;
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (!movementEnabled || body.linearVelocity.y > 0f)
+        if (!movementEnabled || verticalSpeedBeforePhysicsStep >= -0.05f)
             return;
 
         for (int i = 0; i < collision.contactCount; i++)
@@ -79,7 +90,9 @@ public sealed class PlayerMovement : MonoBehaviour
             if (collision.GetContact(i).normal.y > 0.55f)
             {
                 Vector3 velocity = body.linearVelocity;
+                velocity.x = 0f;
                 velocity.y = bounceSpeed;
+                velocity.z = 0f;
                 body.linearVelocity = velocity;
                 return;
             }

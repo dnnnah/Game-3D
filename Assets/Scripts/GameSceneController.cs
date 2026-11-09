@@ -435,8 +435,8 @@ public sealed class GameSceneController : MonoBehaviour
     {
         return new PhysicsMaterial("Helix Ball Bounce")
         {
-            bounciness = 0.72f,
-            bounceCombine = PhysicsMaterialCombine.Maximum,
+            bounciness = 0f,
+            bounceCombine = PhysicsMaterialCombine.Minimum,
             frictionCombine = PhysicsMaterialCombine.Minimum
         };
     }

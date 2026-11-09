@@ -173,8 +173,8 @@ public static class HelixSceneBuilder
             AssetDatabase.CreateAsset(material, path);
         }
 
-        material.bounciness = 0.72f;
-        material.bounceCombine = PhysicsMaterialCombine.Maximum;
+        material.bounciness = 0f;
+        material.bounceCombine = PhysicsMaterialCombine.Minimum;
         material.frictionCombine = PhysicsMaterialCombine.Minimum;
         EditorUtility.SetDirty(material);
         return material;
