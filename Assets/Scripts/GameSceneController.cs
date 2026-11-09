@@ -125,6 +125,7 @@ public sealed class GameSceneController : MonoBehaviour
     {
         if (towerRoot != null && playerTransform != null && towerRotation != null && cameraFollow != null)
         {
+            EnsureTowerPhysicsAndPlatformColliders();
             EnsureFloorPassTriggers();
             return;
         }
@@ -152,6 +153,7 @@ public sealed class GameSceneController : MonoBehaviour
             columnCollider.enabled = false;
 
         BuildPlatformFloors();
+        EnsureTowerPhysicsAndPlatformColliders();
 
         GameObject player = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         player.name = "Player Ball";
@@ -245,6 +247,27 @@ public sealed class GameSceneController : MonoBehaviour
             box.isTrigger = true;
             box.size = new Vector3(8f, 0.25f, 8f);
             triggerTransform.GetComponent<FloorPassTrigger>().Configure(null, floorY);
+        }
+    }
+
+    private void EnsureTowerPhysicsAndPlatformColliders()
+    {
+        if (towerRoot == null)
+            return;
+
+        if (towerRotation == null)
+            towerRotation = towerRoot.GetComponent<TowerRotationController>();
+        if (towerRotation != null)
+            towerRotation.EnsurePhysicsSetup();
+
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+        {
+            if (platformCollider.sharedMesh == null)
+                continue;
+
+            platformCollider.convex = true;
+            platformCollider.isTrigger = false;
+            platformCollider.enabled = true;
         }
     }
 

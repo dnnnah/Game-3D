@@ -19,7 +19,7 @@ public sealed class PlayerMovement : MonoBehaviour
         body.useGravity = true;
         body.isKinematic = true;
         body.interpolation = RigidbodyInterpolation.Interpolate;
-        body.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.constraints = RigidbodyConstraints.FreezePositionX
             | RigidbodyConstraints.FreezePositionZ
             | RigidbodyConstraints.FreezeRotation;
@@ -28,8 +28,15 @@ public sealed class PlayerMovement : MonoBehaviour
     public void SetMovementEnabled(bool enabled)
     {
         movementEnabled = enabled;
+        if (!enabled && !body.isKinematic)
+        {
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
         body.isKinematic = !enabled;
-        body.linearVelocity = enabled ? Vector3.down * initialDropSpeed : Vector3.zero;
+        if (enabled)
+            body.linearVelocity = Vector3.down * initialDropSpeed;
     }
 
     public void SetMaximumFallSpeed(float speed)
@@ -40,10 +47,14 @@ public sealed class PlayerMovement : MonoBehaviour
     public void ResetBall(Vector3 startPosition)
     {
         movementEnabled = false;
+        if (!body.isKinematic)
+        {
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
         body.isKinematic = true;
         body.position = startPosition;
-        body.linearVelocity = Vector3.zero;
-        body.angularVelocity = Vector3.zero;
     }
 
     private void FixedUpdate()
