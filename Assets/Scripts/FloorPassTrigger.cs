@@ -1,12 +1,15 @@
+using System;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
 public sealed class FloorPassTrigger : MonoBehaviour
 {
     [SerializeField] private float floorHeight;
-    [SerializeField, Min(0f)] private float clearanceBelowFloor = 0.25f;
+    [SerializeField, Min(0f), Tooltip("Recicla el piso cuando el balón ya queda por debajo de su espesor.")]
+    private float clearanceBelowFloor = 1f;
 
     private GameProgression progression;
+    private Action passedCallback;
     private bool countedThisRun;
 
     private void Awake()
@@ -16,8 +19,15 @@ public sealed class FloorPassTrigger : MonoBehaviour
 
     public void Configure(GameProgression gameProgression, float height)
     {
+        Configure(gameProgression, height, null);
+    }
+
+    public void Configure(GameProgression gameProgression, float height, Action onPassed)
+    {
         progression = gameProgression;
         floorHeight = height;
+        passedCallback = onPassed;
+        countedThisRun = false;
     }
 
     public void Configure(GameProgression gameProgression)
@@ -35,7 +45,7 @@ public sealed class FloorPassTrigger : MonoBehaviour
 
     private void TryCountFloor(Collider other)
     {
-        if (countedThisRun || progression == null)
+        if (countedThisRun)
             return;
 
         PlayerMovement movement = other.GetComponentInParent<PlayerMovement>();
@@ -46,6 +56,7 @@ public sealed class FloorPassTrigger : MonoBehaviour
             return;
 
         countedThisRun = true;
-        progression.RegisterFloorPassed();
+        progression?.RegisterFloorPassed();
+        passedCallback?.Invoke();
     }
 }
