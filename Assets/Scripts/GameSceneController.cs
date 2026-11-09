@@ -20,6 +20,9 @@ public sealed class GameSceneController : MonoBehaviour
     private MobileInputController mobileInput;
     private PlayerMovement playerMovement;
     private Rigidbody playerBody;
+    private Text distanceText;
+    private Text bestDistanceText;
+    private GameProgression progression;
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private Font uiFont;
@@ -34,6 +37,10 @@ public sealed class GameSceneController : MonoBehaviour
         ConfigureLighting();
         CreateWorld();
         CreateInterface();
+        progression = GetComponent<GameProgression>();
+        if (progression == null)
+            progression = gameObject.AddComponent<GameProgression>();
+        progression.Configure(playerBody.transform, playerMovement, distanceText, bestDistanceText);
         ShowMenu();
     }
 
@@ -155,6 +162,8 @@ public sealed class GameSceneController : MonoBehaviour
             new Vector2(860f, 100f), 42, Paper, FontStyle.Normal);
         CreateButton(menuPanel.transform, "JUGAR", new Vector2(440f, 140f), new Vector2(0.5f, 0.43f),
             Vector2.zero, Accent, Ink, StartGame);
+        bestDistanceText = CreateText(menuPanel.transform, "RÉCORD: 0 m", new Vector2(0.5f, 0.31f), Vector2.zero,
+            new Vector2(800f, 90f), 38, Accent, FontStyle.Bold);
         CreateText(menuPanel.transform, "Controles: botones táctiles o WASD / flechas + espacio",
             new Vector2(0.5f, 0.25f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
 
@@ -164,6 +173,8 @@ public sealed class GameSceneController : MonoBehaviour
         Stretch(gameplayRect);
         CreateText(gameplayPanel.transform, "MOVER · X / Z                         SALTAR · Y",
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
+        distanceText = CreateText(gameplayPanel.transform, "DISTANCIA: 0 m",
+            new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
             new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
 
@@ -280,11 +291,13 @@ public sealed class GameSceneController : MonoBehaviour
         menuPanel.SetActive(false);
         gameplayPanel.SetActive(true);
         playerMovement.SetMovementEnabled(true);
+        progression.BeginRun(playerBody.position.z);
     }
 
     private void ReturnToMenu()
     {
         mobileInput.Clear();
+        progression.EndRun();
         playerMovement.SetMovementEnabled(false);
         playerBody.position = playerStart;
         playerBody.linearVelocity = Vector3.zero;
