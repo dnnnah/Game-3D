@@ -478,9 +478,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   helixPartPrefab: {fileID: 1419940011841542111, guid: c4c5635a125e6b949b42a0608ad53bc3, type: 3}
-  playerStart: {x: 0, y: 0.7, z: 0}
-  cameraHeight: 8
-  cameraZOffset: -10
+  playerStart: {x: 0, y: 11.2, z: 0}
+  platformFloorCount: 6
+  sectorsPerFloor: 12
+  floorSpacing: 1.7
+  cameraHeightOffset: 4.5
+  darkPlatformMaterial: {fileID: 0}
+  yellowPlatformMaterial: {fileID: 0}
+  columnMaterial: {fileID: 0}
+  playerMaterial: {fileID: 0}
+  ballBounceMaterial: {fileID: 0}
+  towerRoot: {fileID: 0}
+  playerTransform: {fileID: 0}
+  towerRotation: {fileID: 0}
+  cameraFollow: {fileID: 0}
+  progression: {fileID: 950000004}
 --- !u!114 &950000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -493,8 +505,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67bc61e62eee4055ad25171687bbe49a, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  initialRunSpeed: 5
-  speedIncreasePerMeter: 0.025
-  maximumRunSpeed: 12
-  speedChangePerSecond: 1.5
-  pointsPerMeter: 1
+  initialMaximumFallSpeed: 12
+  fallSpeedIncreasePerFloor: 0.8
+  maximumFallSpeed: 20
+  speedChangePerSecond: 2.5
