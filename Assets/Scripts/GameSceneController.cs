@@ -9,7 +9,8 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private GameObject helixPartPrefab;
     [SerializeField] private Vector3 playerStart = new Vector3(0f, 11.2f, 0f);
     [SerializeField, Min(3)] private int platformFloorCount = 6;
-    [SerializeField, Min(3)] private int sectorsPerFloor = 10;
+    [SerializeField, Min(3), Tooltip("El sector importado cubre 30 grados; 12 piezas completan la vuelta antes de abrir un hueco.")]
+    private int sectorsPerFloor = 12;
     [SerializeField, Min(0.5f)] private float floorSpacing = 1.7f;
     [SerializeField, Min(0f)] private float cameraHeightOffset = 4.5f;
     [SerializeField] private Material darkPlatformMaterial;
@@ -84,7 +85,7 @@ public sealed class GameSceneController : MonoBehaviour
     {
         playerStart = new Vector3(0f, 11.2f, 0f);
         platformFloorCount = Mathf.Max(platformFloorCount, 6);
-        sectorsPerFloor = Mathf.Max(sectorsPerFloor, 10);
+        sectorsPerFloor = Mathf.Max(sectorsPerFloor, 12);
         floorSpacing = Mathf.Max(floorSpacing, 1.7f);
         cameraHeightOffset = Mathf.Max(cameraHeightOffset, 4.5f);
     }
