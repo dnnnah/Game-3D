@@ -16,12 +16,11 @@ Los jugadores controlan un personaje 3D mediante controles táctiles en un telé
 
 ## Propósito
 
-Entregar un prototipo jugable tridimensional para Optativa: Diseño de Juegos II e integrar los sistemas solicitados en seis pull requests revisables.
+Entregar un prototipo jugable tridimensional para Optativa: Diseño de Juegos II, iniciando con la actividad 1 de movimiento, física, cámara y UI móvil.
 
 ## Capacidades y restricciones
 
 - La actividad 1 establece la UI móvil, el movimiento en tres ejes, las colisiones físicas y el seguimiento de cámara en X/Z con una separación Z constante.
-- Las actividades 2–6 agregan progresión y persistencia, niveles procedurales, personalización visual, navegación entre escenas y efectos temporales.
 - Se usa Unity UI, el Input System instalado y la configuración URP existente.
 - El archivo original `HelixPart.unitypackage` queda fuera de Git; solo se versionan sus recursos importados.
 

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Render-URP-purple" alt="Universal Render Pipeline" />
 </p>
 
-Repositorio del videojuego tridimensional desarrollado por etapas para la materia **Optativa: Diseño de Juegos II**. Cada actividad se entrega en su propia rama y mediante un pull request.
+Repositorio del videojuego tridimensional para la materia **Optativa: Diseño de Juegos II**. Las actividades se entregan en ramas separadas mediante pull requests.
 
 ---
 
@@ -22,38 +22,16 @@ Repositorio del videojuego tridimensional desarrollado por etapas para la materi
 
 ---
 
-## 🚀 Actividades
+## 🚀 Actividad 1: Fundamentos 3D y controles móviles
 
 ### Actividad 1: Fundamentos 3D y controles móviles
 
 - **Objetivo:** configurar la UI móvil, el movimiento tridimensional, las colisiones y una cámara que acompañe al personaje en X y Z conservando su separación en Z.
 - **Recursos:** modelo, material y prefab `HelixPart`.
-- **Estado:** 🟡 En desarrollo
-
-### Actividad 2: Dinámicas y dificultad progresiva
-
-- **Objetivo:** avance fluido, dificultad progresiva, persistencia con `PlayerPrefs` y contador visual.
-- **Estado:** ⚪ Pendiente
-
-### Actividad 3: Niveles procedurales y Game Loop
-
-- **Objetivo:** generación continua de módulos configurables y reinicio al perder.
-- **Estado:** ⚪ Pendiente
-
-### Actividad 4: Iluminación y personalización visual
-
-- **Objetivo:** iluminación ambiental y personalización del fondo y del personaje.
-- **Estado:** ⚪ Pendiente
-
-### Actividad 5: Menús y transiciones entre niveles
-
-- **Objetivo:** navegación completa y jugabilidad en al menos dos niveles consecutivos.
-- **Estado:** ⚪ Pendiente
-
-### Actividad 6: Efectos visuales y potenciadores
-
-- **Objetivo:** estela y potenciador temporal de velocidad, con duración máxima de tres segundos.
-- **Estado:** ⚪ Pendiente
+- **Objetivo:** UI táctil adaptable, movimiento en X/Y/Z, colisiones físicas y cámara que siga X/Z con una separación constante en Z.
+- **Recursos integrados:** modelo, material y prefab `HelixPart`.
+- **Navegación:** menú inicial y pantalla de juego dentro de la escena principal.
+- **Estado:** 🟡 Lista para revisión
 
 ---
 
@@ -73,7 +51,7 @@ Repositorio del videojuego tridimensional desarrollado por etapas para la materi
 
 1. Instala Unity **6000.6.0f1** o una versión Unity 6 compatible.
 2. Abre la carpeta `My project` desde Unity Hub.
-3. Abre `Assets/Scenes/MainMenu.unity` cuando la actividad 1 esté integrada.
+3. Abre `Assets/Scenes/Main.unity`.
 4. Pulsa **Play** en el Editor o crea una compilación para el dispositivo móvil.
 
 El repositorio excluye los directorios generados por Unity, como `Library`, `Temp` y `Logs`. El paquete fuente `HelixPart.unitypackage` se conserva fuera del repositorio; solo se versionan los recursos importados que usa el proyecto.
