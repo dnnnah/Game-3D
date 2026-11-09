@@ -21,6 +21,7 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private Transform playerTransform;
     [SerializeField] private TowerRotationController towerRotation;
     [SerializeField] private CameraFollowY cameraFollow;
+    [SerializeField] private GameProgression progression;
 
     private static readonly Color Ink = new Color(0.68f, 0.7f, 0.73f, 1f);
     private static readonly Color PanelInk = new Color(0.035f, 0.055f, 0.075f, 0.92f);
@@ -30,6 +31,8 @@ public sealed class GameSceneController : MonoBehaviour
 
     private MobileInputController mobileInput;
     private PlayerMovement playerMovement;
+    private Text floorCountText;
+    private Text bestFloorText;
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private Font uiFont;
@@ -48,6 +51,12 @@ public sealed class GameSceneController : MonoBehaviour
         towerRotation.Configure(mobileInput);
         cameraFollow.SetTarget(playerTransform, cameraHeightOffset);
         CreateInterface();
+        progression = GetComponent<GameProgression>();
+        if (progression == null)
+            progression = gameObject.AddComponent<GameProgression>();
+        progression.Configure(playerMovement, floorCountText, bestFloorText);
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.Configure(progression);
         ShowMenu();
     }
 
@@ -59,6 +68,11 @@ public sealed class GameSceneController : MonoBehaviour
         playerTransform = player;
         towerRotation = rotation;
         cameraFollow = followCamera;
+    }
+
+    public void SetProgression(GameProgression gameProgression)
+    {
+        progression = gameProgression;
     }
 
     public void SetScenePrefab(GameObject prefab)
@@ -109,7 +123,10 @@ public sealed class GameSceneController : MonoBehaviour
     private void CreateWorld()
     {
         if (towerRoot != null && playerTransform != null && towerRotation != null && cameraFollow != null)
+        {
+            EnsureFloorPassTriggers();
             return;
+        }
 
         if (darkPlatformMaterial == null)
             darkPlatformMaterial = CreateMaterial(new Color(0.035f, 0.045f, 0.055f));
@@ -200,6 +217,34 @@ public sealed class GameSceneController : MonoBehaviour
                     partRenderer.sharedMaterial = sector == yellowSector ? yellowPlatformMaterial : darkPlatformMaterial;
             }
         }
+
+        EnsureFloorPassTriggers();
+    }
+
+    private void EnsureFloorPassTriggers()
+    {
+        if (towerRoot == null)
+            return;
+
+        for (int floor = 0; floor < platformFloorCount; floor++)
+        {
+            float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
+            string triggerName = $"Floor Pass Trigger {floor + 1}";
+            Transform triggerTransform = towerRoot.Find(triggerName);
+            if (triggerTransform == null)
+            {
+                GameObject triggerObject = new GameObject(triggerName, typeof(BoxCollider), typeof(FloorPassTrigger));
+                triggerTransform = triggerObject.transform;
+                triggerTransform.SetParent(towerRoot, false);
+            }
+
+            triggerTransform.localPosition = new Vector3(0f, floorY - 0.95f, 0f);
+            triggerTransform.localRotation = Quaternion.identity;
+            BoxCollider box = triggerTransform.GetComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = new Vector3(8f, 0.25f, 8f);
+            triggerTransform.GetComponent<FloorPassTrigger>().Configure(null, floorY);
+        }
     }
 
     private static Material CreateMaterial(Color color)
@@ -259,8 +304,10 @@ public sealed class GameSceneController : MonoBehaviour
             new Vector2(860f, 100f), 42, Paper, FontStyle.Normal);
         CreateButton(menuPanel.transform, "JUGAR", new Vector2(440f, 140f), new Vector2(0.5f, 0.43f),
             Vector2.zero, Accent, Ink, StartGame);
+        bestFloorText = CreateText(menuPanel.transform, "RÉCORD: 0 pisos", new Vector2(0.5f, 0.32f),
+            Vector2.zero, new Vector2(800f, 80f), 38, Accent, FontStyle.Bold);
         CreateText(menuPanel.transform, "Desliza horizontalmente · A / D en el Editor",
-            new Vector2(0.5f, 0.25f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
+            new Vector2(0.5f, 0.22f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
 
         gameplayPanel = new GameObject("Gameplay UI", typeof(RectTransform));
         RectTransform gameplayRect = gameplayPanel.GetComponent<RectTransform>();
@@ -268,6 +315,8 @@ public sealed class GameSceneController : MonoBehaviour
         Stretch(gameplayRect);
         CreateText(gameplayPanel.transform, "DESLIZA PARA GIRAR LA TORRE",
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
+        floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
+            new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
             new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
         gameplayPanel.SetActive(false);
@@ -364,6 +413,9 @@ public sealed class GameSceneController : MonoBehaviour
     private void StartGame()
     {
         mobileInput.Clear();
+        progression.BeginRun();
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.ResetForRun();
         menuPanel.SetActive(false);
         gameplayPanel.SetActive(true);
         playerMovement.SetMovementEnabled(true);
@@ -373,6 +425,7 @@ public sealed class GameSceneController : MonoBehaviour
     private void ReturnToMenu()
     {
         mobileInput.Clear();
+        progression.EndRun();
         towerRotation.SetRotationEnabled(false);
         towerRotation.ResetRotation();
         playerMovement.SetMovementEnabled(false);

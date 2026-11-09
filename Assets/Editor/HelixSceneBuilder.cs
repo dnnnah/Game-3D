@@ -24,8 +24,7 @@ public static class HelixSceneBuilder
         if (scene.path != MainScenePath)
             scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
 
-        if (GameObject.Find("Helix Tower") == null)
-            BuildScene(scene);
+        BuildScene(scene);
     }
 
     private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
@@ -41,7 +40,7 @@ public static class HelixSceneBuilder
             && AssetDatabase.LoadAssetAtPath<SceneAsset>(MainScenePath) != null)
             scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
 
-        if (scene.path != MainScenePath || GameObject.Find("Helix Tower") != null)
+        if (scene.path != MainScenePath)
             return;
 
         BuildScene(scene);
@@ -63,7 +62,10 @@ public static class HelixSceneBuilder
             return;
         }
 
-        controller.SetHelixSceneDefaults();
+        GameObject existingTower = GameObject.Find("Helix Tower");
+        bool sceneAlreadyBuilt = existingTower != null;
+        if (!sceneAlreadyBuilt)
+            controller.SetHelixSceneDefaults();
         controller.SetScenePrefab(prefab);
         controller.SetVisualMaterials(
             LoadOrCreateMaterial("HelixDark.mat", new Color(0.035f, 0.045f, 0.055f)),
@@ -71,9 +73,24 @@ public static class HelixSceneBuilder
             LoadOrCreateMaterial("HelixColumn.mat", new Color(0.92f, 0.93f, 0.94f)),
             LoadOrCreateMaterial("HelixBall.mat", new Color(0.92f, 0.04f, 0.035f)),
             LoadOrCreateBounceMaterial());
+
+        if (sceneAlreadyBuilt)
+        {
+            GameObject player = GameObject.Find("Player Ball");
+            TowerRotationController rotation = existingTower.GetComponent<TowerRotationController>();
+            CameraFollowY follow = Object.FindAnyObjectByType<CameraFollowY>();
+            if (player != null && rotation != null && follow != null)
+                controller.SetSceneReferences(prefab, existingTower.transform, player.transform, rotation, follow);
+        }
+
         controller.BuildWorldForEditor();
+        GameProgression progression = Object.FindAnyObjectByType<GameProgression>();
+        if (progression == null)
+            progression = controller.gameObject.AddComponent<GameProgression>();
+        controller.SetProgression(progression);
 
         EditorUtility.SetDirty(controller);
+        EditorUtility.SetDirty(progression);
         CameraFollowY cameraFollow = Object.FindAnyObjectByType<CameraFollowY>();
         if (cameraFollow != null)
             EditorUtility.SetDirty(cameraFollow);

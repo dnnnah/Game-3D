@@ -3,94 +3,97 @@ using UnityEngine.UI;
 
 public sealed class GameProgression : MonoBehaviour
 {
-    private const string BestDistanceKey = "HELIX3D_BEST_DISTANCE";
+    private const string BestFloorsKey = "HELIX_JUMP_BEST_FLOORS";
 
-    [Header("Progresión")]
-    [SerializeField, Min(0f)] private float initialRunSpeed = 5f;
-    [SerializeField, Min(0f)] private float speedIncreasePerMeter = 0.025f;
-    [SerializeField, Min(0f)] private float maximumRunSpeed = 12f;
-    [SerializeField, Min(0f)] private float speedChangePerSecond = 1.5f;
-    [SerializeField, Min(0f)] private float pointsPerMeter = 1f;
+    [Header("Progresión por pisos")]
+    [SerializeField, Min(0f)] private float initialMaximumFallSpeed = 12f;
+    [SerializeField, Min(0f)] private float fallSpeedIncreasePerFloor = 0.8f;
+    [SerializeField, Min(0f)] private float maximumFallSpeed = 20f;
+    [SerializeField, Min(0f)] private float speedChangePerSecond = 2.5f;
 
-    private Transform player;
     private PlayerMovement playerMovement;
-    private Text distanceLabel;
-    private Text bestDistanceLabel;
-    private float runStartZ;
-    private float greatestDistance;
-    private float currentRunSpeed;
-    private int currentScore;
-    private int bestDistance;
+    private Text floorCountLabel;
+    private Text bestFloorLabel;
+    private int floorsPassed;
+    private int bestFloors;
+    private float currentMaximumFallSpeed;
+    private float targetMaximumFallSpeed;
     private bool runActive;
     private bool hasUnsavedRecord;
 
-    public void Configure(Transform playerTransform, PlayerMovement movement, Text scoreText, Text recordText)
+    public int FloorsPassed => floorsPassed;
+
+    public void Configure(PlayerMovement movement, Text currentFloorText, Text bestFloorText)
     {
-        player = playerTransform;
         playerMovement = movement;
-        distanceLabel = scoreText;
-        bestDistanceLabel = recordText;
-        bestDistance = Mathf.Max(0, PlayerPrefs.GetInt(BestDistanceKey, 0));
-        UpdateDistanceLabel();
-        UpdateBestDistanceLabel();
+        floorCountLabel = currentFloorText;
+        bestFloorLabel = bestFloorText;
+        bestFloors = Mathf.Max(0, PlayerPrefs.GetInt(BestFloorsKey, 0));
+        UpdateFloorLabel();
+        UpdateBestFloorLabel();
     }
 
-    public void BeginRun(float startZ)
+    public void BeginRun()
     {
-        if (player == null || playerMovement == null)
+        if (playerMovement == null)
             return;
 
-        runStartZ = startZ;
-        greatestDistance = 0f;
-        currentScore = 0;
-        currentRunSpeed = Mathf.Min(initialRunSpeed, maximumRunSpeed);
+        floorsPassed = 0;
+        currentMaximumFallSpeed = Mathf.Min(initialMaximumFallSpeed, maximumFallSpeed);
+        targetMaximumFallSpeed = currentMaximumFallSpeed;
+        playerMovement.SetMaximumFallSpeed(currentMaximumFallSpeed);
         runActive = true;
-        playerMovement.SetAutomaticForwardSpeed(currentRunSpeed);
-        UpdateDistanceLabel();
+        UpdateFloorLabel();
+    }
+
+    public void RegisterFloorPassed()
+    {
+        if (!runActive)
+            return;
+
+        floorsPassed++;
+        targetMaximumFallSpeed = Mathf.Min(
+            initialMaximumFallSpeed + floorsPassed * fallSpeedIncreasePerFloor,
+            maximumFallSpeed);
+        UpdateFloorLabel();
+
+        if (floorsPassed <= bestFloors)
+            return;
+
+        bestFloors = floorsPassed;
+        hasUnsavedRecord = true;
+        PlayerPrefs.SetInt(BestFloorsKey, bestFloors);
+        UpdateBestFloorLabel();
     }
 
     public void EndRun()
     {
         runActive = false;
-        SaveBestDistance();
+        SaveBestFloors();
     }
 
     private void Update()
     {
-        if (!runActive || player == null || playerMovement == null)
+        if (!runActive || playerMovement == null)
             return;
 
-        greatestDistance = Mathf.Max(greatestDistance, player.position.z - runStartZ);
-        int nextScore = Mathf.FloorToInt(greatestDistance * pointsPerMeter);
-        if (nextScore != currentScore)
-        {
-            currentScore = nextScore;
-            UpdateDistanceLabel();
-        }
-
-        if (currentScore > bestDistance)
-        {
-            bestDistance = currentScore;
-            hasUnsavedRecord = true;
-            PlayerPrefs.SetInt(BestDistanceKey, bestDistance);
-            UpdateBestDistanceLabel();
-        }
-
-        float targetSpeed = Mathf.Min(initialRunSpeed + greatestDistance * speedIncreasePerMeter, maximumRunSpeed);
-        currentRunSpeed = Mathf.MoveTowards(currentRunSpeed, targetSpeed, speedChangePerSecond * Time.deltaTime);
-        playerMovement.SetAutomaticForwardSpeed(currentRunSpeed);
+        currentMaximumFallSpeed = Mathf.MoveTowards(
+            currentMaximumFallSpeed,
+            targetMaximumFallSpeed,
+            speedChangePerSecond * Time.deltaTime);
+        playerMovement.SetMaximumFallSpeed(currentMaximumFallSpeed);
     }
 
-    private void OnApplicationPause(bool isPaused)
+    private void OnApplicationPause(bool paused)
     {
-        if (isPaused)
-            SaveBestDistance();
+        if (paused)
+            SaveBestFloors();
     }
 
-    private void OnApplicationQuit() => SaveBestDistance();
-    private void OnDestroy() => SaveBestDistance();
+    private void OnApplicationQuit() => SaveBestFloors();
+    private void OnDestroy() => SaveBestFloors();
 
-    private void SaveBestDistance()
+    private void SaveBestFloors()
     {
         if (!hasUnsavedRecord)
             return;
@@ -99,15 +102,15 @@ public sealed class GameProgression : MonoBehaviour
         hasUnsavedRecord = false;
     }
 
-    private void UpdateDistanceLabel()
+    private void UpdateFloorLabel()
     {
-        if (distanceLabel != null)
-            distanceLabel.text = $"DISTANCIA: {currentScore} m";
+        if (floorCountLabel != null)
+            floorCountLabel.text = $"PISOS: {floorsPassed}";
     }
 
-    private void UpdateBestDistanceLabel()
+    private void UpdateBestFloorLabel()
     {
-        if (bestDistanceLabel != null)
-            bestDistanceLabel.text = $"RÉCORD: {bestDistance} m";
+        if (bestFloorLabel != null)
+            bestFloorLabel.text = $"RÉCORD: {bestFloors} pisos";
     }
 }

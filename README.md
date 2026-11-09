@@ -28,12 +28,12 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 - **Descripción:** escena 3D vertical con torre segmentada y huecos, balón con Rigidbody y rebote, giro táctil de la torre, cámara que acompaña al balón únicamente en Y y menú adaptable a pantalla Portrait.
 - **Recursos:** prefab `HelixPartPrefab`, modelo y material derivados de `HelixPart.unitypackage`.
-- **Estado:** 🟡 En corrección para coincidir con la referencia Helix Jump.
+- **Estado:** 🟡 Corrección vertical en revisión mediante el PR #3.
 
 ### 📍 Actividad 2: Progresión y persistencia
 
-- **Descripción:** avance contabilizado por pisos superados, dificultad progresiva y récord persistente.
-- **Estado:** 🟡 En desarrollo.
+- **Descripción:** el HUD cuenta cada piso atravesado; la velocidad de caída aumenta suavemente hasta un límite configurable y el récord se guarda con `PlayerPrefs`.
+- **Estado:** 🟡 En revisión mediante el PR #2, actualizado para la mecánica vertical.
 
 ---
 
