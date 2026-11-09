@@ -31,7 +31,7 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
     public void Configure(GameObject prefab, Transform tower, Transform column, GameProgression gameProgression,
         int moduleCount, int sectorCount, int widthOfGap, int initialGapSector, int gapShift, float spacing,
         float angleOffsetPerFloor, float triggerDepth, Vector3 triggerSize, float columnPadding,
-        Material normalMaterial, Material yellowMaterial, Color dangerColor, System.Action onHazardContact)
+        Material normalMaterial, Material accentMaterial, Color dangerColor, System.Action onHazardContact)
     {
         sectorPrefab = prefab;
         towerRoot = tower;
@@ -48,7 +48,7 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
         passTriggerSize = triggerSize;
         columnEndPadding = Mathf.Max(0f, columnPadding);
         platformMaterial = normalMaterial;
-        accentMaterial = yellowMaterial;
+        this.accentMaterial = accentMaterial;
         hazardColor = dangerColor;
         hazardCallback = onHazardContact;
     }

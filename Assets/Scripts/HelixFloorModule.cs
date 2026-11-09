@@ -35,7 +35,7 @@ public sealed class HelixFloorModule : MonoBehaviour
 
     public void Initialize(Transform parent, GameObject prefab, int totalSectors, int widthOfGap,
         int initialGapSector, int gapShift, float angleOffsetPerFloor, float passTriggerDepth, Vector3 passTriggerSize,
-        GameProgression gameProgression, Material normalMaterial, Material yellowMaterial, Color dangerColor,
+        GameProgression gameProgression, Material normalMaterial, Material accentMaterial, Color dangerColor,
         Action<HelixFloorModule> onPassed, Action onHazard)
     {
         transform.SetParent(parent, false);
@@ -50,7 +50,7 @@ public sealed class HelixFloorModule : MonoBehaviour
             Mathf.Max(1f, passTriggerSize.z));
         progression = gameProgression;
         platformMaterial = normalMaterial;
-        accentMaterial = yellowMaterial;
+        this.accentMaterial = accentMaterial;
         hazardColor = dangerColor;
         passedCallback = onPassed;
         hazardCallback = onHazard;
@@ -66,13 +66,13 @@ public sealed class HelixFloorModule : MonoBehaviour
         transform.localPosition = new Vector3(0f, localHeight, 0f);
 
         int normalizedGapStart = Mod(firstGapSector + floorIndex * gapShiftPerFloor, sectorsPerFloor);
-        int yellowSector = Mod(normalizedGapStart + gapWidth + sectorsPerFloor / 2, sectorsPerFloor);
+        int accentSector = Mod(normalizedGapStart + gapWidth + sectorsPerFloor / 2, sectorsPerFloor);
         int availableSectors = sectorsPerFloor - gapWidth;
-        int yellowSlot = Mod(yellowSector - normalizedGapStart - gapWidth, sectorsPerFloor);
+        int accentSlot = Mod(accentSector - normalizedGapStart - gapWidth, sectorsPerFloor);
         int safeCapacityForHazards = Mathf.Max(0, availableSectors - 1);
         int hazardsToPlace = Mathf.Clamp(hazardSectorCount, 0, safeCapacityForHazards);
 
-        List<int> hazardSlots = SelectHazardSlots(floorIndex, availableSectors, yellowSlot, hazardsToPlace);
+        List<int> hazardSlots = SelectHazardSlots(floorIndex, availableSectors, accentSlot, hazardsToPlace);
         for (int slotIndex = 0; slotIndex < sectors.Count; slotIndex++)
         {
             int sectorIndex = Mod(normalizedGapStart + gapWidth + slotIndex, sectorsPerFloor);
@@ -87,7 +87,7 @@ public sealed class HelixFloorModule : MonoBehaviour
 
             bool isHazard = hazardSlots.Contains(slotIndex);
             if (sector.Renderer != null)
-                sector.Renderer.sharedMaterial = sectorIndex == yellowSector ? accentMaterial : platformMaterial;
+                sector.Renderer.sharedMaterial = sectorIndex == accentSector ? accentMaterial : platformMaterial;
             sector.Hazard.Configure(isHazard, hazardColor, hazardCallback);
         }
 

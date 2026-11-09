@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 public sealed class GameSceneController : MonoBehaviour
@@ -26,15 +27,27 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField, Min(0f)] private float passTriggerDepth = 0.95f;
     [SerializeField] private Vector3 passTriggerSize = new Vector3(8f, 0.25f, 8f);
     [SerializeField, Min(0f)] private float columnEndPadding = 1.4f;
-    [SerializeField] private Color hazardColor = new Color(0.95f, 0.035f, 0.025f, 1f);
+    [SerializeField, Tooltip("Rojo brillante para distinguir los sectores letales del acento seguro.")]
+    private Color hazardColor = new Color(1f, 0.08f, 0.02f, 1f);
     [SerializeField, Min(0f)] private float playerSpawnClearance = 3f;
     [SerializeField, Min(0.5f)] private float playerOrbitRadius = 1.1f;
     [SerializeField, Min(0f)] private float cameraHeightOffset = 4.5f;
     [SerializeField] private Material darkPlatformMaterial;
-    [SerializeField] private Material yellowPlatformMaterial;
+    [FormerlySerializedAs("yellowPlatformMaterial")]
+    [SerializeField] private Material safeAccentMaterial;
     [SerializeField] private Material columnMaterial;
     [SerializeField] private Material playerMaterial;
     [SerializeField] private PhysicsMaterial ballBounceMaterial;
+    [Header("Iluminación y fondo")]
+    [SerializeField] private Color backgroundColor = new Color(0.48f, 0.61f, 0.7f, 1f);
+    [SerializeField] private Color ambientLightColor = new Color(0.3f, 0.36f, 0.44f);
+    [SerializeField] private Color directionalLightColor = Color.white;
+    [SerializeField, Min(0f)] private float directionalLightIntensity = 1.25f;
+    [SerializeField] private Vector3 directionalLightRotation = new Vector3(48f, -28f, 0f);
+    [Header("Apariencia del personaje")]
+    [SerializeField] private Color playerColor = new Color(0.92f, 0.04f, 0.035f, 1f);
+    [SerializeField, Range(0f, 1f)] private float playerMetallic = 0.12f;
+    [SerializeField, Range(0f, 1f)] private float playerSmoothness = 0.78f;
     [SerializeField] private Transform towerRoot;
     [SerializeField] private Transform playerTransform;
     [SerializeField] private TowerRotationController towerRotation;
@@ -43,9 +56,14 @@ public sealed class GameSceneController : MonoBehaviour
 
     private static readonly Color Ink = new Color(0.68f, 0.7f, 0.73f, 1f);
     private static readonly Color PanelInk = new Color(0.035f, 0.055f, 0.075f, 0.92f);
-    private static readonly Color Accent = new Color(1f, 0.78f, 0.08f, 1f);
+    private static readonly Color Accent = new Color(0.92f, 0.04f, 0.035f, 1f);
     private static readonly Color ButtonInk = new Color(0.11f, 0.19f, 0.29f, 0.9f);
     private static readonly Color Paper = new Color(0.94f, 0.97f, 1f, 1f);
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    private static readonly int MetallicId = Shader.PropertyToID("_Metallic");
+    private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
+    private static readonly int GlossinessId = Shader.PropertyToID("_Glossiness");
 
     private MobileInputController mobileInput;
     private PlayerMovement playerMovement;
@@ -57,6 +75,7 @@ public sealed class GameSceneController : MonoBehaviour
     private Text gameOverFloorText;
     private Font uiFont;
     private Vector3 playerStart;
+    private MaterialPropertyBlock playerAppearanceBlock;
     [SerializeField] private ProceduralLevelGenerator levelGenerator;
     private RunState runState = RunState.Menu;
 
@@ -69,8 +88,10 @@ public sealed class GameSceneController : MonoBehaviour
             mobileInput = gameObject.AddComponent<MobileInputController>();
 
         ConfigureLighting();
-        CreateWorld();
         EnsureVisualMaterials();
+        CreateWorld();
+        ApplyBackgroundColor();
+        ApplyPlayerAppearance();
         playerMovement = playerTransform.GetComponent<PlayerMovement>();
         playerMovement.SetMovementEnabled(false);
         towerRotation.Configure(mobileInput);
@@ -88,7 +109,7 @@ public sealed class GameSceneController : MonoBehaviour
         levelGenerator.Configure(helixPartPrefab, towerRoot, towerRoot.Find("Central Column"), progression,
             platformFloorCount, sectorsPerFloor, gapWidthSectors, firstGapSector, gapShiftPerFloor,
             floorSpacing, sectorRotationPerFloor, passTriggerDepth, passTriggerSize, columnEndPadding,
-            darkPlatformMaterial, yellowPlatformMaterial, hazardColor, EndRun);
+            darkPlatformMaterial, safeAccentMaterial, hazardColor, EndRun);
         levelGenerator.Initialize();
         ShowMenu();
     }
@@ -130,10 +151,10 @@ public sealed class GameSceneController : MonoBehaviour
         RefreshPlayerStartPosition();
     }
 
-    public void SetVisualMaterials(Material dark, Material yellow, Material white, Material red, PhysicsMaterial bounce)
+    public void SetVisualMaterials(Material dark, Material accent, Material white, Material red, PhysicsMaterial bounce)
     {
         darkPlatformMaterial = dark;
-        yellowPlatformMaterial = yellow;
+        safeAccentMaterial = accent;
         columnMaterial = white;
         playerMaterial = red;
         ballBounceMaterial = bounce;
@@ -142,13 +163,37 @@ public sealed class GameSceneController : MonoBehaviour
     public void BuildWorldForEditor()
     {
         ConfigureLighting();
+        EnsureVisualMaterials();
         CreateWorld();
+        ApplyBackgroundColor();
+        ApplyPlayerAppearance();
+    }
+
+    public void SetBackgroundColor(Color color)
+    {
+        backgroundColor = color;
+        ApplyBackgroundColor();
+    }
+
+    public void SetAmbientLightColor(Color color)
+    {
+        ambientLightColor = color;
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = ambientLightColor;
+    }
+
+    public void SetPlayerAppearance(Color color, float metallic, float smoothness)
+    {
+        playerColor = color;
+        playerMetallic = Mathf.Clamp01(metallic);
+        playerSmoothness = Mathf.Clamp01(smoothness);
+        ApplyPlayerAppearance();
     }
 
     private void ConfigureLighting()
     {
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.3f, 0.36f, 0.44f);
+        RenderSettings.ambientLight = ambientLightColor;
 
         Light keyLight = FindAnyObjectByType<Light>();
         if (keyLight == null)
@@ -157,8 +202,9 @@ public sealed class GameSceneController : MonoBehaviour
             keyLight = lightObject.AddComponent<Light>();
         }
         keyLight.type = LightType.Directional;
-        keyLight.intensity = 1.25f;
-        keyLight.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
+        keyLight.color = directionalLightColor;
+        keyLight.intensity = directionalLightIntensity;
+        keyLight.transform.rotation = Quaternion.Euler(directionalLightRotation);
     }
 
     private void EnsureVisualMaterials()
@@ -166,18 +212,14 @@ public sealed class GameSceneController : MonoBehaviour
         if (darkPlatformMaterial == null)
             darkPlatformMaterial = CreateMaterial(new Color(0.035f, 0.045f, 0.055f));
 
-        if (yellowPlatformMaterial == null && helixPartPrefab != null)
-        {
-            Renderer prefabRenderer = helixPartPrefab.GetComponentInChildren<Renderer>();
-            if (prefabRenderer != null)
-                yellowPlatformMaterial = prefabRenderer.sharedMaterial;
-        }
+        if (safeAccentMaterial == null)
+            safeAccentMaterial = CreateMaterial(playerColor);
 
         if (columnMaterial == null)
             columnMaterial = CreateMaterial(new Color(0.92f, 0.93f, 0.94f));
 
         if (playerMaterial == null)
-            playerMaterial = CreateMaterial(new Color(0.92f, 0.04f, 0.035f));
+            playerMaterial = CreateMaterial(playerColor);
     }
 
     private void CreateWorld()
@@ -200,12 +242,12 @@ public sealed class GameSceneController : MonoBehaviour
 
         if (darkPlatformMaterial == null)
             darkPlatformMaterial = CreateMaterial(new Color(0.035f, 0.045f, 0.055f));
-        if (yellowPlatformMaterial == null && helixPartPrefab != null)
-            yellowPlatformMaterial = helixPartPrefab.GetComponentInChildren<Renderer>().sharedMaterial;
+        if (safeAccentMaterial == null)
+            safeAccentMaterial = CreateMaterial(playerColor);
         if (columnMaterial == null)
             columnMaterial = CreateMaterial(new Color(0.92f, 0.93f, 0.94f));
         if (playerMaterial == null)
-            playerMaterial = CreateMaterial(new Color(0.92f, 0.04f, 0.035f));
+            playerMaterial = CreateMaterial(playerColor);
 
         towerRoot = new GameObject("Helix Tower").transform;
         towerRotation = towerRoot.gameObject.AddComponent<TowerRotationController>();
@@ -247,7 +289,7 @@ public sealed class GameSceneController : MonoBehaviour
             gameCamera = cameraObject.GetComponent<Camera>();
         }
         gameCamera.clearFlags = CameraClearFlags.SolidColor;
-        gameCamera.backgroundColor = Ink;
+        gameCamera.backgroundColor = backgroundColor;
         gameCamera.fieldOfView = 42f;
         gameCamera.transform.position = new Vector3(0f, playerStart.y + cameraHeightOffset, -12f);
         gameCamera.transform.LookAt(new Vector3(0f, playerStart.y - 1f, 0f));
@@ -274,7 +316,7 @@ public sealed class GameSceneController : MonoBehaviour
             int gapStart = (firstGapSector + floor * gapShiftPerFloor) % sectorsPerFloor;
             if (gapStart < 0)
                 gapStart += sectorsPerFloor;
-            int yellowSector = (gapStart + gapWidth + sectorsPerFloor / 2) % sectorsPerFloor;
+            int accentSector = (gapStart + gapWidth + sectorsPerFloor / 2) % sectorsPerFloor;
 
             for (int sector = 0; sector < sectorsPerFloor; sector++)
             {
@@ -296,7 +338,7 @@ public sealed class GameSceneController : MonoBehaviour
 
                 Renderer partRenderer = part.GetComponentInChildren<Renderer>();
                 if (partRenderer != null)
-                    partRenderer.sharedMaterial = sector == yellowSector ? yellowPlatformMaterial : darkPlatformMaterial;
+                    partRenderer.sharedMaterial = sector == accentSector ? safeAccentMaterial : darkPlatformMaterial;
             }
         }
 
@@ -429,6 +471,47 @@ public sealed class GameSceneController : MonoBehaviour
         else if (material.HasProperty("_Color"))
             material.SetColor("_Color", color);
         return material;
+    }
+
+    private void ApplyBackgroundColor()
+    {
+        Camera targetCamera = Camera.main;
+        if (targetCamera == null && cameraFollow != null)
+            targetCamera = cameraFollow.GetComponent<Camera>();
+        if (targetCamera == null)
+            return;
+
+        targetCamera.clearFlags = CameraClearFlags.SolidColor;
+        targetCamera.backgroundColor = backgroundColor;
+    }
+
+    private void ApplyPlayerAppearance()
+    {
+        if (playerTransform == null)
+            return;
+
+        Renderer playerRenderer = playerTransform.GetComponentInChildren<Renderer>();
+        Material playerSharedMaterial = playerRenderer != null ? playerRenderer.sharedMaterial : null;
+        if (playerSharedMaterial == null)
+            return;
+
+        if (playerAppearanceBlock == null)
+            playerAppearanceBlock = new MaterialPropertyBlock();
+
+        playerRenderer.GetPropertyBlock(playerAppearanceBlock);
+        if (playerSharedMaterial.HasProperty(BaseColorId))
+            playerAppearanceBlock.SetColor(BaseColorId, playerColor);
+        else if (playerSharedMaterial.HasProperty(ColorId))
+            playerAppearanceBlock.SetColor(ColorId, playerColor);
+
+        if (playerSharedMaterial.HasProperty(MetallicId))
+            playerAppearanceBlock.SetFloat(MetallicId, playerMetallic);
+        if (playerSharedMaterial.HasProperty(SmoothnessId))
+            playerAppearanceBlock.SetFloat(SmoothnessId, playerSmoothness);
+        else if (playerSharedMaterial.HasProperty(GlossinessId))
+            playerAppearanceBlock.SetFloat(GlossinessId, playerSmoothness);
+
+        playerRenderer.SetPropertyBlock(playerAppearanceBlock);
     }
 
     private static PhysicsMaterial CreateBounceMaterial()
