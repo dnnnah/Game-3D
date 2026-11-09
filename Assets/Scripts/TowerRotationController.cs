@@ -57,7 +57,6 @@ public sealed class TowerRotationController : MonoBehaviour
     {
         EnsurePhysicsSetup();
         body.rotation = startingRotation;
-        body.angularVelocity = Vector3.zero;
         input?.Clear();
         Physics.SyncTransforms();
     }

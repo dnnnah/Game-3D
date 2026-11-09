@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -7,11 +8,15 @@ public sealed class GameSceneController : MonoBehaviour
 {
     [Header("Helix Jump")]
     [SerializeField] private GameObject helixPartPrefab;
-    [SerializeField] private Vector3 playerStart = new Vector3(0f, 11.2f, 0f);
-    [SerializeField, Min(3)] private int platformFloorCount = 6;
+    [SerializeField, Min(3)] private int platformFloorCount = 24;
     [SerializeField, Min(3), Tooltip("El sector importado cubre 30 grados; 12 piezas completan la vuelta antes de abrir un hueco.")]
     private int sectorsPerFloor = 12;
+    [SerializeField, Min(1)] private int gapWidthSectors = 2;
+    [SerializeField, Min(0)] private int firstGapSector;
+    [SerializeField] private int gapShiftPerFloor = 3;
     [SerializeField, Min(0.5f)] private float floorSpacing = 1.7f;
+    [SerializeField, Min(0f)] private float playerSpawnClearance = 3f;
+    [SerializeField, Min(0.5f)] private float playerOrbitRadius = 1.1f;
     [SerializeField, Min(0f)] private float cameraHeightOffset = 4.5f;
     [SerializeField] private Material darkPlatformMaterial;
     [SerializeField] private Material yellowPlatformMaterial;
@@ -37,10 +42,12 @@ public sealed class GameSceneController : MonoBehaviour
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private Font uiFont;
+    private Vector3 playerStart;
 
     private void Start()
     {
         Application.targetFrameRate = 60;
+        SetHelixSceneDefaults();
         mobileInput = GetComponent<MobileInputController>();
         if (mobileInput == null)
             mobileInput = gameObject.AddComponent<MobileInputController>();
@@ -83,11 +90,14 @@ public sealed class GameSceneController : MonoBehaviour
 
     public void SetHelixSceneDefaults()
     {
-        playerStart = new Vector3(0f, 11.2f, 0f);
-        platformFloorCount = Mathf.Max(platformFloorCount, 6);
+        platformFloorCount = Mathf.Max(platformFloorCount, 24);
         sectorsPerFloor = Mathf.Max(sectorsPerFloor, 12);
+        gapWidthSectors = Mathf.Max(gapWidthSectors, 2);
         floorSpacing = Mathf.Max(floorSpacing, 1.7f);
+        playerSpawnClearance = Mathf.Max(playerSpawnClearance, 3f);
+        playerOrbitRadius = Mathf.Max(playerOrbitRadius, 1.1f);
         cameraHeightOffset = Mathf.Max(cameraHeightOffset, 4.5f);
+        RefreshPlayerStartPosition();
     }
 
     public void SetVisualMaterials(Material dark, Material yellow, Material white, Material red, PhysicsMaterial bounce)
@@ -125,6 +135,10 @@ public sealed class GameSceneController : MonoBehaviour
     {
         if (towerRoot != null && playerTransform != null && towerRotation != null && cameraFollow != null)
         {
+            RefreshPlayerStartPosition();
+            EnsurePlatformLayout();
+            UpdateCentralColumn();
+            playerTransform.position = playerStart;
             EnsureTowerPhysicsAndPlatformColliders();
             EnsureFloorPassTriggers();
             return;
@@ -141,6 +155,7 @@ public sealed class GameSceneController : MonoBehaviour
 
         towerRoot = new GameObject("Helix Tower").transform;
         towerRotation = towerRoot.gameObject.AddComponent<TowerRotationController>();
+        towerRotation.EnsurePhysicsSetup();
 
         GameObject column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         column.name = "Central Column";
@@ -153,6 +168,8 @@ public sealed class GameSceneController : MonoBehaviour
             columnCollider.enabled = false;
 
         BuildPlatformFloors();
+        RefreshPlayerStartPosition();
+        UpdateCentralColumn();
         EnsureTowerPhysicsAndPlatformColliders();
 
         GameObject player = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -195,11 +212,13 @@ public sealed class GameSceneController : MonoBehaviour
         if (helixPartPrefab == null)
             return;
 
-        int gapWidth = Mathf.Max(1, sectorsPerFloor / 7);
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
         for (int floor = 0; floor < platformFloorCount; floor++)
         {
             float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
-            int gapStart = (floor * 3 + 1) % sectorsPerFloor;
+            int gapStart = (firstGapSector + floor * gapShiftPerFloor) % sectorsPerFloor;
+            if (gapStart < 0)
+                gapStart += sectorsPerFloor;
             int yellowSector = (gapStart + gapWidth + sectorsPerFloor / 2) % sectorsPerFloor;
 
             for (int sector = 0; sector < sectorsPerFloor; sector++)
@@ -214,6 +233,10 @@ public sealed class GameSceneController : MonoBehaviour
                 part.transform.localRotation = Quaternion.Euler(0f,
                     sector * (360f / sectorsPerFloor) + floor * 9f, 0f) * helixPartPrefab.transform.localRotation;
                 part.transform.localScale = helixPartPrefab.transform.localScale;
+
+                MeshCollider partCollider = part.GetComponent<MeshCollider>();
+                if (partCollider != null)
+                    ConfigurePlatformCollider(partCollider);
 
                 Renderer partRenderer = part.GetComponentInChildren<Renderer>();
                 if (partRenderer != null)
@@ -261,14 +284,80 @@ public sealed class GameSceneController : MonoBehaviour
             towerRotation.EnsurePhysicsSetup();
 
         foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
-        {
-            if (platformCollider.sharedMesh == null)
-                continue;
+            ConfigurePlatformCollider(platformCollider);
+    }
 
-            platformCollider.convex = true;
-            platformCollider.isTrigger = false;
-            platformCollider.enabled = true;
+    private void EnsurePlatformLayout()
+    {
+        if (towerRoot == null || helixPartPrefab == null)
+            return;
+
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
+        int expectedParts = platformFloorCount * (sectorsPerFloor - gapWidth);
+        int existingParts = 0;
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+        {
+            string partName = platformCollider.gameObject.name;
+            if (partName.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && partName.Contains(" · Sector "))
+                existingParts++;
         }
+
+        if (existingParts == expectedParts)
+            return;
+
+        List<Transform> oldParts = new List<Transform>();
+        foreach (Transform child in towerRoot)
+        {
+            if (child.name.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && child.name.Contains(" · Sector ")
+                && child.GetComponent<MeshCollider>() != null)
+                oldParts.Add(child);
+        }
+
+        foreach (Transform oldPart in oldParts)
+        {
+            if (Application.isPlaying)
+                Destroy(oldPart.gameObject);
+            else
+                DestroyImmediate(oldPart.gameObject);
+        }
+
+        BuildPlatformFloors();
+    }
+
+    private void UpdateCentralColumn()
+    {
+        if (towerRoot == null)
+            return;
+
+        Transform column = towerRoot.Find("Central Column");
+        if (column == null)
+            return;
+
+        column.localPosition = new Vector3(0f, (platformFloorCount - 1) * floorSpacing * 0.5f, 0f);
+        column.localScale = new Vector3(1.35f, platformFloorCount * floorSpacing * 0.5f + 1.4f, 1.35f);
+    }
+
+    private void RefreshPlayerStartPosition()
+    {
+        float topFloorY = (platformFloorCount - 1) * floorSpacing;
+        playerStart = new Vector3(0f, topFloorY + playerSpawnClearance, -playerOrbitRadius);
+    }
+
+    private static void ConfigurePlatformCollider(MeshCollider platformCollider)
+    {
+        MeshFilter meshFilter = platformCollider.GetComponent<MeshFilter>();
+        Mesh platformMesh = meshFilter != null ? meshFilter.sharedMesh : null;
+        if (platformMesh != null && platformCollider.sharedMesh != platformMesh)
+        {
+            platformCollider.sharedMesh = null;
+            platformCollider.sharedMesh = platformMesh;
+        }
+
+        platformCollider.convex = true;
+        platformCollider.isTrigger = false;
+        platformCollider.enabled = platformMesh != null;
     }
 
     private static Material CreateMaterial(Color color)

@@ -64,8 +64,7 @@ public static class HelixSceneBuilder
 
         GameObject existingTower = GameObject.Find("Helix Tower");
         bool sceneAlreadyBuilt = existingTower != null;
-        if (!sceneAlreadyBuilt)
-            controller.SetHelixSceneDefaults();
+        controller.SetHelixSceneDefaults();
         controller.SetScenePrefab(prefab);
         controller.SetVisualMaterials(
             LoadOrCreateMaterial("HelixDark.mat", new Color(0.035f, 0.045f, 0.055f)),
@@ -84,6 +83,7 @@ public static class HelixSceneBuilder
         }
 
         controller.BuildWorldForEditor();
+        ConfigurePlatformColliders(GameObject.Find("Helix Tower"));
         GameProgression progression = Object.FindAnyObjectByType<GameProgression>();
         if (progression == null)
             progression = controller.gameObject.AddComponent<GameProgression>();
@@ -107,6 +107,32 @@ public static class HelixSceneBuilder
             SceneView.lastActiveSceneView?.FrameSelected();
         }
         Debug.Log("Helix Jump: escena vertical construida y guardada en Main.unity.");
+    }
+
+    private static void ConfigurePlatformColliders(GameObject tower)
+    {
+        if (tower == null)
+            return;
+
+        foreach (MeshCollider platformCollider in tower.GetComponentsInChildren<MeshCollider>(true))
+        {
+            MeshFilter meshFilter = platformCollider.GetComponent<MeshFilter>();
+            Mesh platformMesh = meshFilter != null ? meshFilter.sharedMesh : null;
+            if (platformMesh == null)
+            {
+                platformCollider.enabled = false;
+                Debug.LogError($"El sector {platformCollider.name} no tiene una malla visual asignada.", platformCollider);
+                continue;
+            }
+
+            platformCollider.sharedMesh = null;
+            platformCollider.sharedMesh = platformMesh;
+            platformCollider.convex = true;
+            platformCollider.isTrigger = false;
+            platformCollider.enabled = true;
+            EditorUtility.SetDirty(platformCollider);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(platformCollider);
+        }
     }
 
     private static Material LoadOrCreateMaterial(string fileName, Color color)
