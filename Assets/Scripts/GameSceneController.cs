@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -10,8 +11,10 @@ public sealed class GameSceneController : MonoBehaviour
     private enum RunState
     {
         Menu,
+        Intro,
         Playing,
-        GameOver
+        GameOver,
+        Transition
     }
 
     [Header("Helix Jump")]
@@ -38,6 +41,14 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private Material columnMaterial;
     [SerializeField] private Material playerMaterial;
     [SerializeField] private PhysicsMaterial ballBounceMaterial;
+    [Header("Potenciador de velocidad")]
+    [SerializeField, Min(0)] private int boostIntervalFloors = 5;
+    [SerializeField, Range(1f, 3f)] private float boostMultiplier = 2.2f;
+    [SerializeField, Range(0.1f, 3f)] private float boostDuration = 2.5f;
+    [SerializeField] private Color boostColor = new Color(0.12f, 0.95f, 1f, 1f);
+    [Header("Ritmo de niveles")]
+    [SerializeField, Min(0f)] private float levelIntroDuration = 1.1f;
+    [SerializeField, Min(0f)] private float levelCompletionDuration = 1.35f;
     [Header("Iluminación y fondo")]
     [SerializeField] private Color backgroundColor = new Color(0.48f, 0.61f, 0.7f, 1f);
     [SerializeField] private Color ambientLightColor = new Color(0.3f, 0.36f, 0.44f);
@@ -82,10 +93,17 @@ public sealed class GameSceneController : MonoBehaviour
     private GameObject gameOverPanel;
     private Text gameOverFloorText;
     private Text gameOverTitleText;
+    private Text levelStatusText;
+    private Text boostStatusText;
+    private Text levelNoticeTitleText;
+    private Text levelNoticeDetailText;
+    private Image levelProgressFill;
+    private GameObject levelNoticePanel;
     private Font uiFont;
     private Vector3 playerStart;
     private MaterialPropertyBlock playerAppearanceBlock;
     private SceneTransitionController sceneTransition;
+    private Coroutine flowCoroutine;
     [SerializeField] private ProceduralLevelGenerator levelGenerator;
     private RunState runState = RunState.Menu;
 
@@ -115,6 +133,7 @@ public sealed class GameSceneController : MonoBehaviour
         if (progression == null)
             progression = gameObject.AddComponent<GameProgression>();
         progression.Configure(playerMovement, floorCountText, bestFloorText);
+        progression.ConfigureLevelProfile(levelNumber);
         foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
             trigger.Configure(progression);
         levelGenerator = GetComponent<ProceduralLevelGenerator>();
@@ -123,7 +142,8 @@ public sealed class GameSceneController : MonoBehaviour
         levelGenerator.Configure(helixPartPrefab, towerRoot, towerRoot.Find("Central Column"), progression,
             platformFloorCount, sectorsPerFloor, gapWidthSectors, firstGapSector, gapShiftPerFloor,
             floorSpacing, sectorRotationPerFloor, passTriggerDepth, passTriggerSize, columnEndPadding,
-            darkPlatformMaterial, safeAccentMaterial, hazardColor, EndRun);
+            darkPlatformMaterial, safeAccentMaterial, hazardColor, EndRun,
+            boostIntervalFloors, boostMultiplier, boostDuration, boostColor);
         levelGenerator.Initialize();
         if (!isMainMenuScene && autoStartLevel)
             StartGame();
@@ -179,6 +199,12 @@ public sealed class GameSceneController : MonoBehaviour
         playerSpawnClearance = Mathf.Max(playerSpawnClearance, 3f);
         playerOrbitRadius = Mathf.Max(playerOrbitRadius, 1.1f);
         cameraHeightOffset = Mathf.Max(cameraHeightOffset, 4.5f);
+        if (levelNumber == 2)
+        {
+            gapShiftPerFloor = 2;
+            sectorRotationPerFloor = 6f;
+            boostIntervalFloors = Mathf.Max(4, boostIntervalFloors);
+        }
         RefreshPlayerStartPosition();
     }
 
@@ -223,9 +249,32 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void Update()
     {
+        UpdateLevelProgress();
         if (runState == RunState.Playing && floorsToCompleteLevel > 0
             && progression != null && progression.FloorsPassed >= floorsToCompleteLevel)
             CompleteLevel();
+    }
+
+    private void UpdateLevelProgress()
+    {
+        if (levelProgressFill != null)
+        {
+            float target = floorsToCompleteLevel > 0 && progression != null
+                ? Mathf.Clamp01(progression.FloorsPassed / (float)floorsToCompleteLevel)
+                : 0f;
+            levelProgressFill.fillAmount = Mathf.MoveTowards(levelProgressFill.fillAmount, target,
+                Time.unscaledDeltaTime * 1.8f);
+        }
+
+        if (levelStatusText != null && levelNumber > 0 && progression != null)
+            levelStatusText.text = floorsToCompleteLevel > 0
+                ? $"NIVEL {levelNumber}  ·  {Mathf.Min(progression.FloorsPassed, floorsToCompleteLevel)}/{floorsToCompleteLevel}"
+                : $"NIVEL {levelNumber}  ·  {progression.FloorsPassed} pisos";
+
+        if (boostStatusText != null && playerMovement != null && playerMovement.IsSpeedBoostActive)
+            boostStatusText.text = $"{playerMovement.SpeedBoostTimeRemaining:0.0}s";
+        else if (boostStatusText != null)
+            boostStatusText.text = "";
     }
 
     private void ConfigureLighting()
@@ -594,7 +643,7 @@ public sealed class GameSceneController : MonoBehaviour
         CreateText(menuPanel.transform, "Gira la torre y guía el balón por los huecos.", new Vector2(0.5f, 0.58f), Vector2.zero,
             new Vector2(860f, 100f), 42, Paper, FontStyle.Normal);
         CreateButton(menuPanel.transform, "JUGAR", new Vector2(440f, 140f), new Vector2(0.5f, 0.43f),
-            Vector2.zero, Accent, Ink, StartGame);
+            Vector2.zero, Accent, Ink, StartGame, 44, GameIconGraphic.IconType.Play);
         bestFloorText = CreateText(menuPanel.transform, "RÉCORD: 0 pisos", new Vector2(0.5f, 0.32f),
             Vector2.zero, new Vector2(800f, 80f), 38, Accent, FontStyle.Bold);
         CreateText(menuPanel.transform, "Desliza horizontalmente · A / D en el Editor",
@@ -609,10 +658,34 @@ public sealed class GameSceneController : MonoBehaviour
         floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
             new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
         if (levelNumber > 0)
-            CreateText(gameplayPanel.transform, $"NIVEL {levelNumber}",
-                new Vector2(1f, 1f), new Vector2(-140f, -70f), new Vector2(250f, 72f), 32, Paper, FontStyle.Bold);
+        {
+            levelStatusText = CreateText(gameplayPanel.transform, $"NIVEL {levelNumber}  ·  0/{floorsToCompleteLevel}",
+                new Vector2(0.5f, 1f), new Vector2(0f, -220f), new Vector2(760f, 56f), 30, Paper, FontStyle.Bold);
+            GameObject progressTrack = new GameObject("Level Progress Track", typeof(RectTransform), typeof(Image));
+            RectTransform trackRect = progressTrack.GetComponent<RectTransform>();
+            trackRect.SetParent(gameplayPanel.transform, false);
+            trackRect.anchorMin = trackRect.anchorMax = new Vector2(0.5f, 1f);
+            trackRect.anchoredPosition = new Vector2(0f, -264f);
+            trackRect.sizeDelta = new Vector2(740f, 18f);
+            progressTrack.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.22f);
+            GameObject fillObject = new GameObject("Progress Fill", typeof(RectTransform), typeof(Image));
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.SetParent(trackRect, false);
+            Stretch(fillRect);
+            levelProgressFill = fillObject.GetComponent<Image>();
+            levelProgressFill.color = Accent;
+            levelProgressFill.type = Image.Type.Filled;
+            levelProgressFill.fillMethod = Image.FillMethod.Horizontal;
+            levelProgressFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            levelProgressFill.fillAmount = 0f;
+
+            CreateIcon(gameplayPanel.transform, GameIconGraphic.IconType.Bolt, boostColor,
+                new Vector2(1f, 1f), new Vector2(-106f, -338f), new Vector2(58f, 58f));
+            boostStatusText = CreateText(gameplayPanel.transform, "", new Vector2(1f, 1f),
+                new Vector2(-150f, -394f), new Vector2(240f, 46f), 26, boostColor, FontStyle.Bold);
+        }
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
-            new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
+            new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu, 28, GameIconGraphic.IconType.Menu);
         gameplayPanel.SetActive(false);
 
         gameOverPanel = CreatePanel("Game Over", safeAreaRect, PanelInk);
@@ -621,10 +694,24 @@ public sealed class GameSceneController : MonoBehaviour
         gameOverFloorText = CreateText(gameOverPanel.transform, "PISOS: 0", new Vector2(0.5f, 0.54f),
             Vector2.zero, new Vector2(800f, 90f), 44, Paper, FontStyle.Bold);
         CreateButton(gameOverPanel.transform, "REINTENTAR", new Vector2(520f, 140f),
-            new Vector2(0.5f, 0.41f), Vector2.zero, Accent, Ink, StartGame);
+            new Vector2(0.5f, 0.41f), Vector2.zero, Accent, Ink, StartGame, 44, GameIconGraphic.IconType.Replay);
         CreateButton(gameOverPanel.transform, "MENÚ", new Vector2(440f, 120f),
-            new Vector2(0.5f, 0.29f), Vector2.zero, ButtonInk, Paper, ReturnToMenu);
+            new Vector2(0.5f, 0.29f), Vector2.zero, ButtonInk, Paper, ReturnToMenu, 40, GameIconGraphic.IconType.Home);
         gameOverPanel.SetActive(false);
+
+        levelNoticePanel = new GameObject("Level Flow Notice", typeof(RectTransform), typeof(Image));
+        RectTransform noticeRect = levelNoticePanel.GetComponent<RectTransform>();
+        noticeRect.SetParent(safeAreaRect, false);
+        noticeRect.anchorMin = noticeRect.anchorMax = new Vector2(0.5f, 0.52f);
+        noticeRect.anchoredPosition = Vector2.zero;
+        noticeRect.sizeDelta = new Vector2(860f, 250f);
+        levelNoticePanel.GetComponent<Image>().color = PanelInk;
+        levelNoticePanel.GetComponent<Image>().raycastTarget = false;
+        levelNoticeTitleText = CreateText(levelNoticePanel.transform, "NIVEL", new Vector2(0.5f, 0.68f),
+            Vector2.zero, new Vector2(800f, 96f), 52, Accent, FontStyle.Bold);
+        levelNoticeDetailText = CreateText(levelNoticePanel.transform, "", new Vector2(0.5f, 0.3f),
+            Vector2.zero, new Vector2(800f, 76f), 30, Paper, FontStyle.Normal);
+        levelNoticePanel.SetActive(false);
 
         uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
@@ -642,7 +729,8 @@ public sealed class GameSceneController : MonoBehaviour
     }
 
     private Button CreateButton(Transform parent, string label, Vector2 size, Vector2 anchor, Vector2 position,
-        Color background, Color foreground, UnityEngine.Events.UnityAction onClick, int fontSize = 44)
+        Color background, Color foreground, UnityEngine.Events.UnityAction onClick, int fontSize = 44,
+        GameIconGraphic.IconType iconType = GameIconGraphic.IconType.None)
     {
         GameObject buttonObject = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
@@ -672,6 +760,13 @@ public sealed class GameSceneController : MonoBehaviour
         RectTransform labelRect = labelObject.GetComponent<RectTransform>();
         labelRect.SetParent(rect, false);
         Stretch(labelRect);
+        if (iconType != GameIconGraphic.IconType.None)
+        {
+            labelRect.offsetMin = new Vector2(Mathf.Min(96f, size.x * 0.34f), 0f);
+            float iconSize = Mathf.Min(size.y * 0.45f, size.x * 0.28f);
+            CreateIcon(rect, iconType, foreground, new Vector2(0f, 0.5f),
+                new Vector2(size.x * 0.13f, 0f), new Vector2(iconSize, iconSize));
+        }
         Text text = labelObject.GetComponent<Text>();
         text.text = label;
         text.font = GetFont();
@@ -683,6 +778,20 @@ public sealed class GameSceneController : MonoBehaviour
         text.verticalOverflow = VerticalWrapMode.Overflow;
         text.raycastTarget = false;
         return button;
+    }
+
+    private static GameIconGraphic CreateIcon(Transform parent, GameIconGraphic.IconType iconType, Color tint,
+        Vector2 anchor, Vector2 position, Vector2 size)
+    {
+        GameObject iconObject = new GameObject($"{iconType} Icon", typeof(RectTransform), typeof(GameIconGraphic));
+        RectTransform rect = iconObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.anchorMin = rect.anchorMax = anchor;
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+        GameIconGraphic icon = iconObject.GetComponent<GameIconGraphic>();
+        icon.SetIcon(iconType, tint);
+        return icon;
     }
 
     private Text CreateText(Transform parent, string value, Vector2 anchor, Vector2 position,
@@ -723,25 +832,47 @@ public sealed class GameSceneController : MonoBehaviour
             return;
         }
 
-        if (runState == RunState.Playing)
+        if (runState == RunState.Playing || runState == RunState.Intro || runState == RunState.Transition)
             return;
 
+        StopFlowCoroutine();
         mobileInput.Clear();
         towerRotation.SetRotationEnabled(false);
         towerRotation.ResetRotation();
         playerMovement.ResetBall(playerStart);
         progression.BeginRun();
         levelGenerator?.ResetForRun();
-        runState = RunState.Playing;
+        runState = RunState.Intro;
         menuPanel.SetActive(false);
         gameplayPanel.SetActive(true);
         gameOverPanel.SetActive(false);
+        levelNoticeTitleText.text = $"NIVEL {levelNumber} · INICIO";
+        levelNoticeDetailText.text = floorsToCompleteLevel > 0
+            ? $"Llega a {floorsToCompleteLevel} pisos para completar el nivel."
+            : "Guía el balón por los huecos.";
+        levelNoticePanel.SetActive(true);
+        if (levelProgressFill != null)
+            levelProgressFill.fillAmount = 0f;
+        flowCoroutine = StartCoroutine(BeginLevelAfterIntro());
+    }
+
+    private IEnumerator BeginLevelAfterIntro()
+    {
+        yield return new WaitForSecondsRealtime(levelIntroDuration);
+        if (runState != RunState.Intro)
+            yield break;
+
+        levelNoticePanel.SetActive(false);
+        runState = RunState.Playing;
         playerMovement.SetMovementEnabled(true);
         towerRotation.SetRotationEnabled(true);
+        flowCoroutine = null;
     }
 
     private void ReturnToMenu()
     {
+        StopFlowCoroutine();
+        levelNoticePanel.SetActive(false);
         if (!isMainMenuScene)
         {
             mobileInput.Clear();
@@ -767,6 +898,8 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void ShowMenu()
     {
+        StopFlowCoroutine();
+        levelNoticePanel.SetActive(false);
         runState = RunState.Menu;
         menuPanel.SetActive(true);
         gameplayPanel.SetActive(false);
@@ -785,12 +918,20 @@ public sealed class GameSceneController : MonoBehaviour
         runState = RunState.GameOver;
         progression.EndRun();
         mobileInput.Clear();
-        playerMovement.SetMovementEnabled(false);
+        playerMovement.Die(hazardColor);
         towerRotation.SetRotationEnabled(false);
         gameOverTitleText.text = "FIN DE LA PARTIDA";
         gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
+        levelNoticePanel.SetActive(false);
+        flowCoroutine = StartCoroutine(ShowGameOverAfterDeath());
+    }
+
+    private IEnumerator ShowGameOverAfterDeath()
+    {
+        yield return new WaitForSecondsRealtime(0.75f);
         gameplayPanel.SetActive(false);
         gameOverPanel.SetActive(true);
+        flowCoroutine = null;
     }
 
     private void CompleteLevel()
@@ -798,20 +939,45 @@ public sealed class GameSceneController : MonoBehaviour
         if (runState != RunState.Playing)
             return;
 
-        runState = RunState.GameOver;
+        runState = RunState.Transition;
         progression.EndRun();
         mobileInput.Clear();
         playerMovement.SetMovementEnabled(false);
         towerRotation.SetRotationEnabled(false);
+        gameplayPanel.SetActive(false);
+        gameOverPanel.SetActive(false);
+        levelNoticeTitleText.text = $"NIVEL {levelNumber} · COMPLETADO";
+        levelNoticeDetailText.text = "Preparando el siguiente tramo…";
+        levelNoticePanel.SetActive(true);
+        flowCoroutine = StartCoroutine(ContinueAfterLevelCompletion());
+    }
+
+    private IEnumerator ContinueAfterLevelCompletion()
+    {
+        yield return new WaitForSecondsRealtime(levelCompletionDuration);
+        levelNoticePanel.SetActive(false);
 
         if (!string.IsNullOrWhiteSpace(nextLevelSceneName)
             && sceneTransition.LoadNextLevel(nextLevelSceneName))
+        {
+            flowCoroutine = null;
+            yield break;
+        }
+
+        runState = RunState.GameOver;
+        gameOverTitleText.text = $"¡NIVEL {levelNumber} COMPLETADO!";
+        gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
+        gameOverPanel.SetActive(true);
+        flowCoroutine = null;
+    }
+
+    private void StopFlowCoroutine()
+    {
+        if (flowCoroutine == null)
             return;
 
-        gameOverTitleText.text = "¡NIVEL COMPLETADO!";
-        gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
-        gameplayPanel.SetActive(false);
-        gameOverPanel.SetActive(true);
+        StopCoroutine(flowCoroutine);
+        flowCoroutine = null;
     }
 
     private static void Stretch(RectTransform rect)

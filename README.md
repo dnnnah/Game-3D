@@ -44,18 +44,18 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 - **Descripción:** fondo configurable en ejecución, iluminación ambiental y direccional ajustable, bola personalizable y acento seguro rojo a juego con la bola.
 - **Especificación:** `docs/specs/SPEC-visual-management.md`.
-- **Estado:** PR #5 abierto para revisión en la rama `actividad-4-gestion-visual`.
+- **Estado:** Completada. El PR #5 está fusionado.
 
 ### Actividad 5: Menús y transiciones entre niveles
 
 - **Descripción:** menú principal conectado a dos niveles consecutivos, carga asíncrona validada mediante `SceneManager` y opciones de reintento/regreso al menú.
 - **Especificación:** `docs/specs/SPEC-scene-flow.md`.
-- **Estado:** PR #6 abierto para revisión en la rama `actividad-5-navegacion-niveles`, encadenado al PR #5 de la actividad 4.
+- **Estado:** Completada. El PR #6 está fusionado.
 
 ### Actividad 6: Efectos y potenciadores
 
-- **Descripción:** efectos visuales y potenciador de velocidad con una estela temporal de hasta tres segundos.
-- **Estado:** Pendiente.
+- **Descripción:** control de torre suavizado, botones con iconos vectoriales, sectores rojos que se rompen y provocan la derrota, potenciador de velocidad con estela de hasta tres segundos y metas más largas con avisos de inicio y final. El nivel 2 usa una progresión más gradual.
+- **Estado:** En revisión en el PR #7, rama `actividad-6-efectos-fluidez-niveles`.
 
 ---
 
