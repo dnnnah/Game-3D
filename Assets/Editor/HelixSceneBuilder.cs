@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -8,6 +9,8 @@ using UnityEngine.SceneManagement;
 public static class HelixSceneBuilder
 {
     private const string MainScenePath = "Assets/Scenes/Main.unity";
+    private const string LevelOneScenePath = "Assets/Scenes/Level1.unity";
+    private const string LevelTwoScenePath = "Assets/Scenes/Level2.unity";
     private const string HelixPrefabPath = "Assets/Prefabs/HelixPartPrefab.prefab";
     private const string MaterialFolder = "Assets/Materials";
 
@@ -66,6 +69,7 @@ public static class HelixSceneBuilder
         bool sceneAlreadyBuilt = existingTower != null;
         controller.SetHelixSceneDefaults();
         controller.SetScenePrefab(prefab);
+        controller.ConfigureSceneFlow(true, false, 0, 0, "Level1", string.Empty, "Main");
         controller.SetVisualMaterials(
             LoadOrCreateMaterial("HelixDark.mat", new Color(0.035f, 0.045f, 0.055f)),
             LoadOrCreateMaterial("HelixAccent.mat", new Color(0.92f, 0.04f, 0.035f)),
@@ -106,6 +110,7 @@ public static class HelixSceneBuilder
         EditorSceneManager.MarkSceneDirty(scene);
         AssetDatabase.SaveAssets();
         EditorSceneManager.SaveScene(scene);
+        EnsureLevelScenes(prefab);
         GameObject tower = GameObject.Find("Helix Tower");
         if (tower != null)
         {
@@ -113,6 +118,55 @@ public static class HelixSceneBuilder
             SceneView.lastActiveSceneView?.FrameSelected();
         }
         Debug.Log("Helix Jump: escena vertical construida y guardada en Main.unity.");
+    }
+
+    private static void EnsureLevelScenes(GameObject prefab)
+    {
+        CreateLevelSceneIfMissing(LevelOneScenePath, prefab, 1, 6, "Level2");
+        CreateLevelSceneIfMissing(LevelTwoScenePath, prefab, 2, 8, string.Empty);
+
+        List<EditorBuildSettingsScene> buildScenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+        AddBuildSceneIfMissing(buildScenes, MainScenePath);
+        AddBuildSceneIfMissing(buildScenes, LevelOneScenePath);
+        AddBuildSceneIfMissing(buildScenes, LevelTwoScenePath);
+        EditorBuildSettings.scenes = buildScenes.ToArray();
+        AssetDatabase.SaveAssets();
+    }
+
+    private static void CreateLevelSceneIfMissing(string scenePath, GameObject prefab, int levelNumber,
+        int floorsToComplete, string nextScene)
+    {
+        if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
+            return;
+
+        Scene previousActiveScene = SceneManager.GetActiveScene();
+        Scene levelScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+        SceneManager.SetActiveScene(levelScene);
+
+        GameObject session = new GameObject("Game Session");
+        GameSceneController controller = session.AddComponent<GameSceneController>();
+        controller.SetScenePrefab(prefab);
+        controller.ConfigureSceneFlow(false, true, levelNumber, floorsToComplete,
+            "Level1", nextScene, "Main");
+        EditorSceneManager.SaveScene(levelScene, scenePath);
+        EditorSceneManager.CloseScene(levelScene, true);
+        if (previousActiveScene.IsValid())
+            SceneManager.SetActiveScene(previousActiveScene);
+    }
+
+    private static void AddBuildSceneIfMissing(List<EditorBuildSettingsScene> buildScenes, string scenePath)
+    {
+        for (int i = 0; i < buildScenes.Count; i++)
+        {
+            if (buildScenes[i].path == scenePath)
+            {
+                if (!buildScenes[i].enabled)
+                    buildScenes[i] = new EditorBuildSettingsScene(scenePath, true);
+                return;
+            }
+        }
+
+        buildScenes.Add(new EditorBuildSettingsScene(scenePath, true));
     }
 
     private static void ConfigurePlatformColliders(GameObject tower)

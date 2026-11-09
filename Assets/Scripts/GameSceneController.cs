@@ -48,6 +48,14 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private Color playerColor = new Color(0.92f, 0.04f, 0.035f, 1f);
     [SerializeField, Range(0f, 1f)] private float playerMetallic = 0.12f;
     [SerializeField, Range(0f, 1f)] private float playerSmoothness = 0.78f;
+    [Header("Flujo de escenas")]
+    [SerializeField] private bool isMainMenuScene = true;
+    [SerializeField] private bool autoStartLevel;
+    [SerializeField, Min(0)] private int levelNumber;
+    [SerializeField, Min(0)] private int floorsToCompleteLevel;
+    [SerializeField] private string firstLevelSceneName = "Level1";
+    [SerializeField] private string nextLevelSceneName;
+    [SerializeField] private string mainMenuSceneName = "Main";
     [SerializeField] private Transform towerRoot;
     [SerializeField] private Transform playerTransform;
     [SerializeField] private TowerRotationController towerRotation;
@@ -73,9 +81,11 @@ public sealed class GameSceneController : MonoBehaviour
     private GameObject gameplayPanel;
     private GameObject gameOverPanel;
     private Text gameOverFloorText;
+    private Text gameOverTitleText;
     private Font uiFont;
     private Vector3 playerStart;
     private MaterialPropertyBlock playerAppearanceBlock;
+    private SceneTransitionController sceneTransition;
     [SerializeField] private ProceduralLevelGenerator levelGenerator;
     private RunState runState = RunState.Menu;
 
@@ -86,6 +96,10 @@ public sealed class GameSceneController : MonoBehaviour
         mobileInput = GetComponent<MobileInputController>();
         if (mobileInput == null)
             mobileInput = gameObject.AddComponent<MobileInputController>();
+        sceneTransition = GetComponent<SceneTransitionController>();
+        if (sceneTransition == null)
+            sceneTransition = gameObject.AddComponent<SceneTransitionController>();
+        sceneTransition.Configure(mainMenuSceneName, firstLevelSceneName);
 
         ConfigureLighting();
         EnsureVisualMaterials();
@@ -111,7 +125,10 @@ public sealed class GameSceneController : MonoBehaviour
             floorSpacing, sectorRotationPerFloor, passTriggerDepth, passTriggerSize, columnEndPadding,
             darkPlatformMaterial, safeAccentMaterial, hazardColor, EndRun);
         levelGenerator.Initialize();
-        ShowMenu();
+        if (!isMainMenuScene && autoStartLevel)
+            StartGame();
+        else
+            ShowMenu();
     }
 
     public void SetSceneReferences(GameObject prefab, Transform tower, Transform player, TowerRotationController rotation,
@@ -132,6 +149,20 @@ public sealed class GameSceneController : MonoBehaviour
     public void SetProceduralLevelGenerator(ProceduralLevelGenerator generator)
     {
         levelGenerator = generator;
+    }
+
+    public void ConfigureSceneFlow(bool mainMenuScene, bool startAutomatically, int sceneLevelNumber,
+        int floorGoal, string firstLevelScene, string nextLevelScene, string menuScene)
+    {
+        isMainMenuScene = mainMenuScene;
+        autoStartLevel = startAutomatically;
+        levelNumber = Mathf.Max(0, sceneLevelNumber);
+        floorsToCompleteLevel = Mathf.Max(0, floorGoal);
+        firstLevelSceneName = firstLevelScene;
+        nextLevelSceneName = nextLevelScene;
+        mainMenuSceneName = menuScene;
+        if (sceneTransition != null)
+            sceneTransition.Configure(mainMenuSceneName, firstLevelSceneName);
     }
 
     public void SetScenePrefab(GameObject prefab)
@@ -188,6 +219,13 @@ public sealed class GameSceneController : MonoBehaviour
         playerMetallic = Mathf.Clamp01(metallic);
         playerSmoothness = Mathf.Clamp01(smoothness);
         ApplyPlayerAppearance();
+    }
+
+    private void Update()
+    {
+        if (runState == RunState.Playing && floorsToCompleteLevel > 0
+            && progression != null && progression.FloorsPassed >= floorsToCompleteLevel)
+            CompleteLevel();
     }
 
     private void ConfigureLighting()
@@ -570,12 +608,15 @@ public sealed class GameSceneController : MonoBehaviour
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
         floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
             new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
+        if (levelNumber > 0)
+            CreateText(gameplayPanel.transform, $"NIVEL {levelNumber}",
+                new Vector2(1f, 1f), new Vector2(-140f, -70f), new Vector2(250f, 72f), 32, Paper, FontStyle.Bold);
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
             new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
         gameplayPanel.SetActive(false);
 
         gameOverPanel = CreatePanel("Game Over", safeAreaRect, PanelInk);
-        CreateText(gameOverPanel.transform, "FIN DE LA PARTIDA", new Vector2(0.5f, 0.67f), Vector2.zero,
+        gameOverTitleText = CreateText(gameOverPanel.transform, "FIN DE LA PARTIDA", new Vector2(0.5f, 0.67f), Vector2.zero,
             new Vector2(900f, 150f), 76, Accent, FontStyle.Bold);
         gameOverFloorText = CreateText(gameOverPanel.transform, "PISOS: 0", new Vector2(0.5f, 0.54f),
             Vector2.zero, new Vector2(800f, 90f), 44, Paper, FontStyle.Bold);
@@ -676,6 +717,12 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void StartGame()
     {
+        if (isMainMenuScene)
+        {
+            sceneTransition.LoadFirstLevel();
+            return;
+        }
+
         if (runState == RunState.Playing)
             return;
 
@@ -695,6 +742,16 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void ReturnToMenu()
     {
+        if (!isMainMenuScene)
+        {
+            mobileInput.Clear();
+            progression.EndRun();
+            playerMovement.SetMovementEnabled(false);
+            towerRotation.SetRotationEnabled(false);
+            if (sceneTransition.LoadMenu())
+                return;
+        }
+
         mobileInput.Clear();
         progression.EndRun();
         runState = RunState.Menu;
@@ -730,6 +787,28 @@ public sealed class GameSceneController : MonoBehaviour
         mobileInput.Clear();
         playerMovement.SetMovementEnabled(false);
         towerRotation.SetRotationEnabled(false);
+        gameOverTitleText.text = "FIN DE LA PARTIDA";
+        gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
+        gameplayPanel.SetActive(false);
+        gameOverPanel.SetActive(true);
+    }
+
+    private void CompleteLevel()
+    {
+        if (runState != RunState.Playing)
+            return;
+
+        runState = RunState.GameOver;
+        progression.EndRun();
+        mobileInput.Clear();
+        playerMovement.SetMovementEnabled(false);
+        towerRotation.SetRotationEnabled(false);
+
+        if (!string.IsNullOrWhiteSpace(nextLevelSceneName)
+            && sceneTransition.LoadNextLevel(nextLevelSceneName))
+            return;
+
+        gameOverTitleText.text = "¡NIVEL COMPLETADO!";
         gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
         gameplayPanel.SetActive(false);
         gameOverPanel.SetActive(true);
