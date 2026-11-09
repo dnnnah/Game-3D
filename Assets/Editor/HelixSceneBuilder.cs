@@ -122,8 +122,8 @@ public static class HelixSceneBuilder
 
     private static void EnsureLevelScenes(GameObject prefab)
     {
-        CreateLevelSceneIfMissing(LevelOneScenePath, prefab, 1, 6, "Level2");
-        CreateLevelSceneIfMissing(LevelTwoScenePath, prefab, 2, 8, string.Empty);
+        CreateOrUpdateLevelScene(LevelOneScenePath, prefab, 1, 12, "Level2");
+        CreateOrUpdateLevelScene(LevelTwoScenePath, prefab, 2, 18, string.Empty);
 
         List<EditorBuildSettingsScene> buildScenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
         AddBuildSceneIfMissing(buildScenes, MainScenePath);
@@ -133,25 +133,45 @@ public static class HelixSceneBuilder
         AssetDatabase.SaveAssets();
     }
 
-    private static void CreateLevelSceneIfMissing(string scenePath, GameObject prefab, int levelNumber,
+    private static void CreateOrUpdateLevelScene(string scenePath, GameObject prefab, int levelNumber,
         int floorsToComplete, string nextScene)
     {
-        if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
-            return;
-
         Scene previousActiveScene = SceneManager.GetActiveScene();
-        Scene levelScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+        bool sceneExists = AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null;
+        Scene levelScene = sceneExists
+            ? EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive)
+            : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
         SceneManager.SetActiveScene(levelScene);
 
-        GameObject session = new GameObject("Game Session");
-        GameSceneController controller = session.AddComponent<GameSceneController>();
+        GameSceneController controller = FindControllerInScene(levelScene);
+        if (controller == null)
+        {
+            GameObject session = new GameObject("Game Session");
+            controller = session.AddComponent<GameSceneController>();
+        }
+
         controller.SetScenePrefab(prefab);
         controller.ConfigureSceneFlow(false, true, levelNumber, floorsToComplete,
             "Level1", nextScene, "Main");
+        EditorUtility.SetDirty(controller);
+        EditorSceneManager.MarkSceneDirty(levelScene);
         EditorSceneManager.SaveScene(levelScene, scenePath);
         EditorSceneManager.CloseScene(levelScene, true);
         if (previousActiveScene.IsValid())
             SceneManager.SetActiveScene(previousActiveScene);
+    }
+
+    private static GameSceneController FindControllerInScene(Scene scene)
+    {
+        GameObject[] roots = scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            GameSceneController controller = roots[i].GetComponentInChildren<GameSceneController>(true);
+            if (controller != null)
+                return controller;
+        }
+
+        return null;
     }
 
     private static void AddBuildSceneIfMissing(List<EditorBuildSettingsScene> buildScenes, string scenePath)
