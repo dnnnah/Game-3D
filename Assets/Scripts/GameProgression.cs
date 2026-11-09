@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -5,11 +6,28 @@ public sealed class GameProgression : MonoBehaviour
 {
     private const string BestFloorsKey = "HELIX_JUMP_BEST_FLOORS";
 
+    [Serializable]
+    private struct DifficultyStep
+    {
+        [Min(0)] public int floorsRequired;
+        [Min(0f)] public float fallSpeedCap;
+        [Min(0)] public int hazardSectorCount;
+    }
+
     [Header("Progresión por pisos")]
     [SerializeField, Min(0f)] private float initialMaximumFallSpeed = 12f;
     [SerializeField, Min(0f)] private float fallSpeedIncreasePerFloor = 0.8f;
     [SerializeField, Min(0f)] private float maximumFallSpeed = 20f;
     [SerializeField, Min(0f)] private float speedChangePerSecond = 2.5f;
+
+    [Header("Niveles de dificultad")]
+    [SerializeField] private DifficultyStep[] difficultySteps =
+    {
+        new DifficultyStep { floorsRequired = 0, fallSpeedCap = 15.2f, hazardSectorCount = 0 },
+        new DifficultyStep { floorsRequired = 4, fallSpeedCap = 18.4f, hazardSectorCount = 1 },
+        new DifficultyStep { floorsRequired = 8, fallSpeedCap = 20f, hazardSectorCount = 2 },
+        new DifficultyStep { floorsRequired = 12, fallSpeedCap = 20f, hazardSectorCount = 3 }
+    };
 
     private PlayerMovement playerMovement;
     private Text floorCountLabel;
@@ -22,6 +40,7 @@ public sealed class GameProgression : MonoBehaviour
     private bool hasUnsavedRecord;
 
     public int FloorsPassed => floorsPassed;
+    public int HazardSectorsPerFloor => Mathf.Max(0, GetCurrentDifficultyStep().hazardSectorCount);
 
     public void Configure(PlayerMovement movement, Text currentFloorText, Text bestFloorText)
     {
@@ -39,7 +58,7 @@ public sealed class GameProgression : MonoBehaviour
             return;
 
         floorsPassed = 0;
-        currentMaximumFallSpeed = Mathf.Min(initialMaximumFallSpeed, maximumFallSpeed);
+        currentMaximumFallSpeed = Mathf.Min(initialMaximumFallSpeed, GetFallSpeedCap(GetCurrentDifficultyStep()));
         targetMaximumFallSpeed = currentMaximumFallSpeed;
         playerMovement.SetMaximumFallSpeed(currentMaximumFallSpeed);
         runActive = true;
@@ -52,9 +71,10 @@ public sealed class GameProgression : MonoBehaviour
             return;
 
         floorsPassed++;
+        DifficultyStep step = GetCurrentDifficultyStep();
         targetMaximumFallSpeed = Mathf.Min(
             initialMaximumFallSpeed + floorsPassed * fallSpeedIncreasePerFloor,
-            maximumFallSpeed);
+            GetFallSpeedCap(step));
         UpdateFloorLabel();
 
         if (floorsPassed <= bestFloors)
@@ -112,5 +132,32 @@ public sealed class GameProgression : MonoBehaviour
     {
         if (bestFloorLabel != null)
             bestFloorLabel.text = $"RÉCORD: {bestFloors} pisos";
+    }
+
+    private DifficultyStep GetCurrentDifficultyStep()
+    {
+        DifficultyStep current = new DifficultyStep
+        {
+            floorsRequired = 0,
+            fallSpeedCap = maximumFallSpeed,
+            hazardSectorCount = 0
+        };
+
+        if (difficultySteps == null)
+            return current;
+
+        for (int i = 0; i < difficultySteps.Length; i++)
+        {
+            DifficultyStep candidate = difficultySteps[i];
+            if (candidate.floorsRequired <= floorsPassed && candidate.floorsRequired >= current.floorsRequired)
+                current = candidate;
+        }
+
+        return current;
+    }
+
+    private float GetFallSpeedCap(DifficultyStep step)
+    {
+        return Mathf.Min(maximumFallSpeed, Mathf.Max(0f, step.fallSpeedCap));
     }
 }
