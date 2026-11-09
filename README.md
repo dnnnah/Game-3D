@@ -48,8 +48,9 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 ### Actividad 5: Menús y transiciones entre niveles
 
-- **Descripción:** navegación por interfaces y cambio limpio entre al menos dos niveles mediante `SceneManager`.
-- **Estado:** Pendiente.
+- **Descripción:** menú principal conectado a dos niveles consecutivos, carga asíncrona validada mediante `SceneManager` y opciones de reintento/regreso al menú.
+- **Especificación:** `docs/specs/SPEC-scene-flow.md`.
+- **Estado:** PR #6 abierto para revisión en la rama `actividad-5-navegacion-niveles`, encadenado al PR #5 de la actividad 4.
 
 ### Actividad 6: Efectos y potenciadores
 
