@@ -42,8 +42,9 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 ### Actividad 4: Iluminación y personalización visual
 
-- **Descripción:** configuración de iluminación ambiental y direccional, color del entorno y apariencia del personaje.
-- **Estado:** Pendiente.
+- **Descripción:** fondo configurable en ejecución, iluminación ambiental y direccional ajustable, bola personalizable y acento seguro rojo a juego con la bola.
+- **Especificación:** `docs/specs/SPEC-visual-management.md`.
+- **Estado:** PR #5 abierto para revisión en la rama `actividad-4-gestion-visual`, apilado sobre el PR #4 de la actividad 3.
 
 ### Actividad 5: Menús y transiciones entre niveles
 
