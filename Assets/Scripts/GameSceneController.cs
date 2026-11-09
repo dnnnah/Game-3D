@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -7,11 +8,15 @@ public sealed class GameSceneController : MonoBehaviour
 {
     [Header("Helix Jump")]
     [SerializeField] private GameObject helixPartPrefab;
-    [SerializeField] private Vector3 playerStart = new Vector3(0f, 11.2f, 0f);
-    [SerializeField, Min(3)] private int platformFloorCount = 6;
+    [SerializeField, Min(3)] private int platformFloorCount = 24;
     [SerializeField, Min(3), Tooltip("El sector importado cubre 30 grados; 12 piezas completan la vuelta antes de abrir un hueco.")]
     private int sectorsPerFloor = 12;
+    [SerializeField, Min(1)] private int gapWidthSectors = 2;
+    [SerializeField, Min(0)] private int firstGapSector;
+    [SerializeField] private int gapShiftPerFloor = 3;
     [SerializeField, Min(0.5f)] private float floorSpacing = 1.7f;
+    [SerializeField, Min(0f)] private float playerSpawnClearance = 3f;
+    [SerializeField, Min(0.5f)] private float playerOrbitRadius = 1.1f;
     [SerializeField, Min(0f)] private float cameraHeightOffset = 4.5f;
     [SerializeField] private Material darkPlatformMaterial;
     [SerializeField] private Material yellowPlatformMaterial;
@@ -22,6 +27,7 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private Transform playerTransform;
     [SerializeField] private TowerRotationController towerRotation;
     [SerializeField] private CameraFollowY cameraFollow;
+    [SerializeField] private GameProgression progression;
 
     private static readonly Color Ink = new Color(0.68f, 0.7f, 0.73f, 1f);
     private static readonly Color PanelInk = new Color(0.035f, 0.055f, 0.075f, 0.92f);
@@ -31,13 +37,17 @@ public sealed class GameSceneController : MonoBehaviour
 
     private MobileInputController mobileInput;
     private PlayerMovement playerMovement;
+    private Text floorCountText;
+    private Text bestFloorText;
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private Font uiFont;
+    private Vector3 playerStart;
 
     private void Start()
     {
         Application.targetFrameRate = 60;
+        SetHelixSceneDefaults();
         mobileInput = GetComponent<MobileInputController>();
         if (mobileInput == null)
             mobileInput = gameObject.AddComponent<MobileInputController>();
@@ -49,6 +59,12 @@ public sealed class GameSceneController : MonoBehaviour
         towerRotation.Configure(mobileInput);
         cameraFollow.SetTarget(playerTransform, cameraHeightOffset);
         CreateInterface();
+        progression = GetComponent<GameProgression>();
+        if (progression == null)
+            progression = gameObject.AddComponent<GameProgression>();
+        progression.Configure(playerMovement, floorCountText, bestFloorText);
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.Configure(progression);
         ShowMenu();
     }
 
@@ -62,6 +78,11 @@ public sealed class GameSceneController : MonoBehaviour
         cameraFollow = followCamera;
     }
 
+    public void SetProgression(GameProgression gameProgression)
+    {
+        progression = gameProgression;
+    }
+
     public void SetScenePrefab(GameObject prefab)
     {
         helixPartPrefab = prefab;
@@ -69,11 +90,14 @@ public sealed class GameSceneController : MonoBehaviour
 
     public void SetHelixSceneDefaults()
     {
-        playerStart = new Vector3(0f, 11.2f, 0f);
-        platformFloorCount = Mathf.Max(platformFloorCount, 6);
+        platformFloorCount = Mathf.Max(platformFloorCount, 24);
         sectorsPerFloor = Mathf.Max(sectorsPerFloor, 12);
+        gapWidthSectors = Mathf.Max(gapWidthSectors, 2);
         floorSpacing = Mathf.Max(floorSpacing, 1.7f);
+        playerSpawnClearance = Mathf.Max(playerSpawnClearance, 3f);
+        playerOrbitRadius = Mathf.Max(playerOrbitRadius, 1.1f);
         cameraHeightOffset = Mathf.Max(cameraHeightOffset, 4.5f);
+        RefreshPlayerStartPosition();
     }
 
     public void SetVisualMaterials(Material dark, Material yellow, Material white, Material red, PhysicsMaterial bounce)
@@ -110,7 +134,15 @@ public sealed class GameSceneController : MonoBehaviour
     private void CreateWorld()
     {
         if (towerRoot != null && playerTransform != null && towerRotation != null && cameraFollow != null)
+        {
+            RefreshPlayerStartPosition();
+            EnsurePlatformLayout();
+            UpdateCentralColumn();
+            playerTransform.position = playerStart;
+            EnsureTowerPhysicsAndPlatformColliders();
+            EnsureFloorPassTriggers();
             return;
+        }
 
         if (darkPlatformMaterial == null)
             darkPlatformMaterial = CreateMaterial(new Color(0.035f, 0.045f, 0.055f));
@@ -123,6 +155,7 @@ public sealed class GameSceneController : MonoBehaviour
 
         towerRoot = new GameObject("Helix Tower").transform;
         towerRotation = towerRoot.gameObject.AddComponent<TowerRotationController>();
+        towerRotation.EnsurePhysicsSetup();
 
         GameObject column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         column.name = "Central Column";
@@ -135,6 +168,9 @@ public sealed class GameSceneController : MonoBehaviour
             columnCollider.enabled = false;
 
         BuildPlatformFloors();
+        RefreshPlayerStartPosition();
+        UpdateCentralColumn();
+        EnsureTowerPhysicsAndPlatformColliders();
 
         GameObject player = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         player.name = "Player Ball";
@@ -176,11 +212,13 @@ public sealed class GameSceneController : MonoBehaviour
         if (helixPartPrefab == null)
             return;
 
-        int gapWidth = Mathf.Max(1, sectorsPerFloor / 7);
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
         for (int floor = 0; floor < platformFloorCount; floor++)
         {
             float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
-            int gapStart = (floor * 3 + 1) % sectorsPerFloor;
+            int gapStart = (firstGapSector + floor * gapShiftPerFloor) % sectorsPerFloor;
+            if (gapStart < 0)
+                gapStart += sectorsPerFloor;
             int yellowSector = (gapStart + gapWidth + sectorsPerFloor / 2) % sectorsPerFloor;
 
             for (int sector = 0; sector < sectorsPerFloor; sector++)
@@ -196,11 +234,130 @@ public sealed class GameSceneController : MonoBehaviour
                     sector * (360f / sectorsPerFloor) + floor * 9f, 0f) * helixPartPrefab.transform.localRotation;
                 part.transform.localScale = helixPartPrefab.transform.localScale;
 
+                MeshCollider partCollider = part.GetComponent<MeshCollider>();
+                if (partCollider != null)
+                    ConfigurePlatformCollider(partCollider);
+
                 Renderer partRenderer = part.GetComponentInChildren<Renderer>();
                 if (partRenderer != null)
                     partRenderer.sharedMaterial = sector == yellowSector ? yellowPlatformMaterial : darkPlatformMaterial;
             }
         }
+
+        EnsureFloorPassTriggers();
+    }
+
+    private void EnsureFloorPassTriggers()
+    {
+        if (towerRoot == null)
+            return;
+
+        for (int floor = 0; floor < platformFloorCount; floor++)
+        {
+            float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
+            string triggerName = $"Floor Pass Trigger {floor + 1}";
+            Transform triggerTransform = towerRoot.Find(triggerName);
+            if (triggerTransform == null)
+            {
+                GameObject triggerObject = new GameObject(triggerName, typeof(BoxCollider), typeof(FloorPassTrigger));
+                triggerTransform = triggerObject.transform;
+                triggerTransform.SetParent(towerRoot, false);
+            }
+
+            triggerTransform.localPosition = new Vector3(0f, floorY - 0.95f, 0f);
+            triggerTransform.localRotation = Quaternion.identity;
+            BoxCollider box = triggerTransform.GetComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = new Vector3(8f, 0.25f, 8f);
+            triggerTransform.GetComponent<FloorPassTrigger>().Configure(null, floorY);
+        }
+    }
+
+    private void EnsureTowerPhysicsAndPlatformColliders()
+    {
+        if (towerRoot == null)
+            return;
+
+        if (towerRotation == null)
+            towerRotation = towerRoot.GetComponent<TowerRotationController>();
+        if (towerRotation != null)
+            towerRotation.EnsurePhysicsSetup();
+
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+            ConfigurePlatformCollider(platformCollider);
+    }
+
+    private void EnsurePlatformLayout()
+    {
+        if (towerRoot == null || helixPartPrefab == null)
+            return;
+
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
+        int expectedParts = platformFloorCount * (sectorsPerFloor - gapWidth);
+        int existingParts = 0;
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+        {
+            string partName = platformCollider.gameObject.name;
+            if (partName.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && partName.Contains(" · Sector "))
+                existingParts++;
+        }
+
+        if (existingParts == expectedParts)
+            return;
+
+        List<Transform> oldParts = new List<Transform>();
+        foreach (Transform child in towerRoot)
+        {
+            if (child.name.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && child.name.Contains(" · Sector ")
+                && child.GetComponent<MeshCollider>() != null)
+                oldParts.Add(child);
+        }
+
+        foreach (Transform oldPart in oldParts)
+        {
+            if (Application.isPlaying)
+                Destroy(oldPart.gameObject);
+            else
+                DestroyImmediate(oldPart.gameObject);
+        }
+
+        BuildPlatformFloors();
+    }
+
+    private void UpdateCentralColumn()
+    {
+        if (towerRoot == null)
+            return;
+
+        Transform column = towerRoot.Find("Central Column");
+        if (column == null)
+            return;
+
+        column.localPosition = new Vector3(0f, (platformFloorCount - 1) * floorSpacing * 0.5f, 0f);
+        column.localScale = new Vector3(1.35f, platformFloorCount * floorSpacing * 0.5f + 1.4f, 1.35f);
+    }
+
+    private void RefreshPlayerStartPosition()
+    {
+        float topFloorY = (platformFloorCount - 1) * floorSpacing;
+        playerStart = new Vector3(0f, topFloorY + playerSpawnClearance, -playerOrbitRadius);
+    }
+
+    private static void ConfigurePlatformCollider(MeshCollider platformCollider)
+    {
+        MeshFilter meshFilter = platformCollider.GetComponent<MeshFilter>();
+        Mesh platformMesh = meshFilter != null ? meshFilter.sharedMesh : null;
+        if (platformMesh != null && platformCollider.sharedMesh != platformMesh)
+        {
+            platformCollider.sharedMesh = null;
+            platformCollider.sharedMesh = platformMesh;
+        }
+
+        platformCollider.convex = true;
+        platformCollider.isTrigger = false;
+        platformCollider.enabled = platformMesh != null;
     }
 
     private static Material CreateMaterial(Color color)
@@ -260,8 +417,10 @@ public sealed class GameSceneController : MonoBehaviour
             new Vector2(860f, 100f), 42, Paper, FontStyle.Normal);
         CreateButton(menuPanel.transform, "JUGAR", new Vector2(440f, 140f), new Vector2(0.5f, 0.43f),
             Vector2.zero, Accent, Ink, StartGame);
+        bestFloorText = CreateText(menuPanel.transform, "RÉCORD: 0 pisos", new Vector2(0.5f, 0.32f),
+            Vector2.zero, new Vector2(800f, 80f), 38, Accent, FontStyle.Bold);
         CreateText(menuPanel.transform, "Desliza horizontalmente · A / D en el Editor",
-            new Vector2(0.5f, 0.25f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
+            new Vector2(0.5f, 0.22f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
 
         gameplayPanel = new GameObject("Gameplay UI", typeof(RectTransform));
         RectTransform gameplayRect = gameplayPanel.GetComponent<RectTransform>();
@@ -269,6 +428,8 @@ public sealed class GameSceneController : MonoBehaviour
         Stretch(gameplayRect);
         CreateText(gameplayPanel.transform, "DESLIZA PARA GIRAR LA TORRE",
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
+        floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
+            new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
             new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
         gameplayPanel.SetActive(false);
@@ -365,6 +526,9 @@ public sealed class GameSceneController : MonoBehaviour
     private void StartGame()
     {
         mobileInput.Clear();
+        progression.BeginRun();
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.ResetForRun();
         menuPanel.SetActive(false);
         gameplayPanel.SetActive(true);
         playerMovement.SetMovementEnabled(true);
@@ -374,6 +538,7 @@ public sealed class GameSceneController : MonoBehaviour
     private void ReturnToMenu()
     {
         mobileInput.Clear();
+        progression.EndRun();
         towerRotation.SetRotationEnabled(false);
         towerRotation.ResetRotation();
         playerMovement.SetMovementEnabled(false);
