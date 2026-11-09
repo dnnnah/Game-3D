@@ -55,7 +55,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 ### Actividad 6: Efectos y potenciadores
 
 - **Descripción:** control de torre suavizado, botones con iconos vectoriales, sectores rojos que se rompen y provocan la derrota, potenciador de velocidad con estela de hasta tres segundos y metas más largas con avisos de inicio y final. El nivel 2 usa una progresión más gradual.
-- **Estado:** En desarrollo en la rama `actividad-6-efectos-fluidez-niveles`.
+- **Estado:** En revisión en el PR #7, rama `actividad-6-efectos-fluidez-niveles`.
 
 ---
 
