@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -5,36 +6,113 @@ using UnityEngine.UI;
 
 public sealed class GameSceneController : MonoBehaviour
 {
-    [Header("Escenario")]
+    [Header("Helix Jump")]
     [SerializeField] private GameObject helixPartPrefab;
-    [SerializeField] private Vector3 playerStart = new Vector3(0f, 0.7f, 0f);
-    [SerializeField, Min(0f)] private float cameraHeight = 8f;
-    [SerializeField] private float cameraZOffset = -10f;
+    [SerializeField, Min(3)] private int platformFloorCount = 24;
+    [SerializeField, Min(3), Tooltip("El sector importado cubre 30 grados; 12 piezas completan la vuelta antes de abrir un hueco.")]
+    private int sectorsPerFloor = 12;
+    [SerializeField, Min(1)] private int gapWidthSectors = 2;
+    [SerializeField, Min(0)] private int firstGapSector;
+    [SerializeField] private int gapShiftPerFloor = 3;
+    [SerializeField, Min(0.5f)] private float floorSpacing = 1.7f;
+    [SerializeField, Min(0f)] private float playerSpawnClearance = 3f;
+    [SerializeField, Min(0.5f)] private float playerOrbitRadius = 1.1f;
+    [SerializeField, Min(0f)] private float cameraHeightOffset = 4.5f;
+    [SerializeField] private Material darkPlatformMaterial;
+    [SerializeField] private Material yellowPlatformMaterial;
+    [SerializeField] private Material columnMaterial;
+    [SerializeField] private Material playerMaterial;
+    [SerializeField] private PhysicsMaterial ballBounceMaterial;
+    [SerializeField] private Transform towerRoot;
+    [SerializeField] private Transform playerTransform;
+    [SerializeField] private TowerRotationController towerRotation;
+    [SerializeField] private CameraFollowY cameraFollow;
+    [SerializeField] private GameProgression progression;
 
-    private static readonly Color Ink = new Color(0.035f, 0.075f, 0.13f, 1f);
-    private static readonly Color PanelInk = new Color(0.035f, 0.075f, 0.13f, 0.93f);
-    private static readonly Color Accent = new Color(1f, 0.82f, 0.12f, 1f);
+    private static readonly Color Ink = new Color(0.68f, 0.7f, 0.73f, 1f);
+    private static readonly Color PanelInk = new Color(0.035f, 0.055f, 0.075f, 0.92f);
+    private static readonly Color Accent = new Color(1f, 0.78f, 0.08f, 1f);
     private static readonly Color ButtonInk = new Color(0.11f, 0.19f, 0.29f, 0.9f);
     private static readonly Color Paper = new Color(0.94f, 0.97f, 1f, 1f);
 
     private MobileInputController mobileInput;
     private PlayerMovement playerMovement;
-    private Rigidbody playerBody;
+    private Text floorCountText;
+    private Text bestFloorText;
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private Font uiFont;
+    private Vector3 playerStart;
 
     private void Start()
     {
         Application.targetFrameRate = 60;
+        SetHelixSceneDefaults();
         mobileInput = GetComponent<MobileInputController>();
         if (mobileInput == null)
             mobileInput = gameObject.AddComponent<MobileInputController>();
 
         ConfigureLighting();
         CreateWorld();
+        playerMovement = playerTransform.GetComponent<PlayerMovement>();
+        playerMovement.SetMovementEnabled(false);
+        towerRotation.Configure(mobileInput);
+        cameraFollow.SetTarget(playerTransform, cameraHeightOffset);
         CreateInterface();
+        progression = GetComponent<GameProgression>();
+        if (progression == null)
+            progression = gameObject.AddComponent<GameProgression>();
+        progression.Configure(playerMovement, floorCountText, bestFloorText);
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.Configure(progression);
         ShowMenu();
+    }
+
+    public void SetSceneReferences(GameObject prefab, Transform tower, Transform player, TowerRotationController rotation,
+        CameraFollowY followCamera)
+    {
+        helixPartPrefab = prefab;
+        towerRoot = tower;
+        playerTransform = player;
+        towerRotation = rotation;
+        cameraFollow = followCamera;
+    }
+
+    public void SetProgression(GameProgression gameProgression)
+    {
+        progression = gameProgression;
+    }
+
+    public void SetScenePrefab(GameObject prefab)
+    {
+        helixPartPrefab = prefab;
+    }
+
+    public void SetHelixSceneDefaults()
+    {
+        platformFloorCount = Mathf.Max(platformFloorCount, 24);
+        sectorsPerFloor = Mathf.Max(sectorsPerFloor, 12);
+        gapWidthSectors = Mathf.Max(gapWidthSectors, 2);
+        floorSpacing = Mathf.Max(floorSpacing, 1.7f);
+        playerSpawnClearance = Mathf.Max(playerSpawnClearance, 3f);
+        playerOrbitRadius = Mathf.Max(playerOrbitRadius, 1.1f);
+        cameraHeightOffset = Mathf.Max(cameraHeightOffset, 4.5f);
+        RefreshPlayerStartPosition();
+    }
+
+    public void SetVisualMaterials(Material dark, Material yellow, Material white, Material red, PhysicsMaterial bounce)
+    {
+        darkPlatformMaterial = dark;
+        yellowPlatformMaterial = yellow;
+        columnMaterial = white;
+        playerMaterial = red;
+        ballBounceMaterial = bounce;
+    }
+
+    public void BuildWorldForEditor()
+    {
+        ConfigureLighting();
+        CreateWorld();
     }
 
     private void ConfigureLighting()
@@ -55,30 +133,56 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void CreateWorld()
     {
-        Transform world = new GameObject("World").transform;
+        if (towerRoot != null && playerTransform != null && towerRotation != null && cameraFollow != null)
+        {
+            RefreshPlayerStartPosition();
+            EnsurePlatformLayout();
+            UpdateCentralColumn();
+            playerTransform.position = playerStart;
+            EnsureTowerPhysicsAndPlatformColliders();
+            EnsureFloorPassTriggers();
+            return;
+        }
 
-        GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        ground.name = "Ground";
-        ground.transform.SetParent(world, false);
-        ground.transform.position = new Vector3(0f, -0.5f, 35f);
-        ground.transform.localScale = new Vector3(18f, 1f, 90f);
-        ground.GetComponent<Renderer>().sharedMaterial = CreateMaterial(new Color(0.14f, 0.21f, 0.3f));
+        if (darkPlatformMaterial == null)
+            darkPlatformMaterial = CreateMaterial(new Color(0.035f, 0.045f, 0.055f));
+        if (yellowPlatformMaterial == null && helixPartPrefab != null)
+            yellowPlatformMaterial = helixPartPrefab.GetComponentInChildren<Renderer>().sharedMaterial;
+        if (columnMaterial == null)
+            columnMaterial = CreateMaterial(new Color(0.92f, 0.93f, 0.94f));
+        if (playerMaterial == null)
+            playerMaterial = CreateMaterial(new Color(0.92f, 0.04f, 0.035f));
+
+        towerRoot = new GameObject("Helix Tower").transform;
+        towerRotation = towerRoot.gameObject.AddComponent<TowerRotationController>();
+        towerRotation.EnsurePhysicsSetup();
+
+        GameObject column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        column.name = "Central Column";
+        column.transform.SetParent(towerRoot, false);
+        column.transform.localPosition = new Vector3(0f, (platformFloorCount - 1) * floorSpacing * 0.5f, 0f);
+        column.transform.localScale = new Vector3(1.35f, platformFloorCount * floorSpacing * 0.5f + 1.4f, 1.35f);
+        column.GetComponent<Renderer>().sharedMaterial = columnMaterial;
+        Collider columnCollider = column.GetComponent<Collider>();
+        if (columnCollider != null)
+            columnCollider.enabled = false;
+
+        BuildPlatformFloors();
+        RefreshPlayerStartPosition();
+        UpdateCentralColumn();
+        EnsureTowerPhysicsAndPlatformColliders();
 
         GameObject player = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        player.name = "Player";
-        player.transform.SetParent(world, false);
+        player.name = "Player Ball";
         player.transform.position = playerStart;
-        player.GetComponent<Renderer>().sharedMaterial = CreateMaterial(new Color(0.12f, 0.78f, 0.84f));
-        playerBody = player.AddComponent<Rigidbody>();
+        player.transform.localScale = Vector3.one * 0.72f;
+        player.GetComponent<Renderer>().sharedMaterial = playerMaterial;
+        playerTransform = player.transform;
         playerMovement = player.AddComponent<PlayerMovement>();
-        playerMovement.Configure(mobileInput, false);
-
-        if (helixPartPrefab != null)
-        {
-            Material helixMaterial = CreateMaterial(Accent);
-            PlaceHelixPart(world, new Vector3(4f, 0f, 7f), Quaternion.identity, helixMaterial);
-            PlaceHelixPart(world, new Vector3(-4f, 0f, 17f), Quaternion.Euler(0f, 180f, 0f), helixMaterial);
-        }
+        SphereCollider ballCollider = player.GetComponent<SphereCollider>();
+        if (ballBounceMaterial == null)
+            ballBounceMaterial = CreateBounceMaterial();
+        ballCollider.sharedMaterial = ballBounceMaterial;
 
         Camera gameCamera = Camera.main;
         if (gameCamera == null)
@@ -87,25 +191,173 @@ public sealed class GameSceneController : MonoBehaviour
             cameraObject.tag = "MainCamera";
             gameCamera = cameraObject.GetComponent<Camera>();
         }
-        GameObject cameraObjectInScene = gameCamera.gameObject;
         gameCamera.clearFlags = CameraClearFlags.SolidColor;
         gameCamera.backgroundColor = Ink;
-        gameCamera.fieldOfView = 58f;
-        cameraObjectInScene.transform.position = new Vector3(playerStart.x, cameraHeight, playerStart.z + cameraZOffset);
-        cameraObjectInScene.transform.rotation = Quaternion.Euler(35f, 0f, 0f);
-        CameraFollowXZ cameraFollow = cameraObjectInScene.GetComponent<CameraFollowXZ>();
+        gameCamera.fieldOfView = 42f;
+        gameCamera.transform.position = new Vector3(0f, playerStart.y + cameraHeightOffset, -12f);
+        gameCamera.transform.LookAt(new Vector3(0f, playerStart.y - 1f, 0f));
+        cameraFollow = gameCamera.GetComponent<CameraFollowY>();
         if (cameraFollow == null)
-            cameraFollow = cameraObjectInScene.AddComponent<CameraFollowXZ>();
-        cameraFollow.SetTarget(player.transform, cameraHeight, 0f, cameraZOffset);
+            cameraFollow = gameCamera.gameObject.AddComponent<CameraFollowY>();
+
+        MobileInputController sceneInput = GetComponent<MobileInputController>();
+        if (sceneInput == null)
+            sceneInput = gameObject.AddComponent<MobileInputController>();
+        towerRotation.Configure(sceneInput);
+        cameraFollow.SetTarget(playerTransform, cameraHeightOffset);
     }
 
-    private void PlaceHelixPart(Transform parent, Vector3 position, Quaternion rotation, Material material)
+    private void BuildPlatformFloors()
     {
-        GameObject part = Instantiate(helixPartPrefab, position, rotation, parent);
-        part.name = "Helix Part";
-        Renderer partRenderer = part.GetComponent<Renderer>();
-        if (partRenderer != null)
-            partRenderer.sharedMaterial = material;
+        if (helixPartPrefab == null)
+            return;
+
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
+        for (int floor = 0; floor < platformFloorCount; floor++)
+        {
+            float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
+            int gapStart = (firstGapSector + floor * gapShiftPerFloor) % sectorsPerFloor;
+            if (gapStart < 0)
+                gapStart += sectorsPerFloor;
+            int yellowSector = (gapStart + gapWidth + sectorsPerFloor / 2) % sectorsPerFloor;
+
+            for (int sector = 0; sector < sectorsPerFloor; sector++)
+            {
+                int distanceFromGap = (sector - gapStart + sectorsPerFloor) % sectorsPerFloor;
+                if (distanceFromGap < gapWidth)
+                    continue;
+
+                GameObject part = Instantiate(helixPartPrefab, towerRoot);
+                part.name = $"Floor {floor + 1} · Sector {sector + 1}";
+                part.transform.localPosition = new Vector3(0f, floorY, 0f);
+                part.transform.localRotation = Quaternion.Euler(0f,
+                    sector * (360f / sectorsPerFloor) + floor * 9f, 0f) * helixPartPrefab.transform.localRotation;
+                part.transform.localScale = helixPartPrefab.transform.localScale;
+
+                MeshCollider partCollider = part.GetComponent<MeshCollider>();
+                if (partCollider != null)
+                    ConfigurePlatformCollider(partCollider);
+
+                Renderer partRenderer = part.GetComponentInChildren<Renderer>();
+                if (partRenderer != null)
+                    partRenderer.sharedMaterial = sector == yellowSector ? yellowPlatformMaterial : darkPlatformMaterial;
+            }
+        }
+
+        EnsureFloorPassTriggers();
+    }
+
+    private void EnsureFloorPassTriggers()
+    {
+        if (towerRoot == null)
+            return;
+
+        for (int floor = 0; floor < platformFloorCount; floor++)
+        {
+            float floorY = (platformFloorCount - 1 - floor) * floorSpacing;
+            string triggerName = $"Floor Pass Trigger {floor + 1}";
+            Transform triggerTransform = towerRoot.Find(triggerName);
+            if (triggerTransform == null)
+            {
+                GameObject triggerObject = new GameObject(triggerName, typeof(BoxCollider), typeof(FloorPassTrigger));
+                triggerTransform = triggerObject.transform;
+                triggerTransform.SetParent(towerRoot, false);
+            }
+
+            triggerTransform.localPosition = new Vector3(0f, floorY - 0.95f, 0f);
+            triggerTransform.localRotation = Quaternion.identity;
+            BoxCollider box = triggerTransform.GetComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = new Vector3(8f, 0.25f, 8f);
+            triggerTransform.GetComponent<FloorPassTrigger>().Configure(null, floorY);
+        }
+    }
+
+    private void EnsureTowerPhysicsAndPlatformColliders()
+    {
+        if (towerRoot == null)
+            return;
+
+        if (towerRotation == null)
+            towerRotation = towerRoot.GetComponent<TowerRotationController>();
+        if (towerRotation != null)
+            towerRotation.EnsurePhysicsSetup();
+
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+            ConfigurePlatformCollider(platformCollider);
+    }
+
+    private void EnsurePlatformLayout()
+    {
+        if (towerRoot == null || helixPartPrefab == null)
+            return;
+
+        int gapWidth = Mathf.Clamp(gapWidthSectors, 1, sectorsPerFloor - 1);
+        int expectedParts = platformFloorCount * (sectorsPerFloor - gapWidth);
+        int existingParts = 0;
+        foreach (MeshCollider platformCollider in towerRoot.GetComponentsInChildren<MeshCollider>(true))
+        {
+            string partName = platformCollider.gameObject.name;
+            if (partName.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && partName.Contains(" · Sector "))
+                existingParts++;
+        }
+
+        if (existingParts == expectedParts)
+            return;
+
+        List<Transform> oldParts = new List<Transform>();
+        foreach (Transform child in towerRoot)
+        {
+            if (child.name.StartsWith("Floor ", System.StringComparison.Ordinal)
+                && child.name.Contains(" · Sector ")
+                && child.GetComponent<MeshCollider>() != null)
+                oldParts.Add(child);
+        }
+
+        foreach (Transform oldPart in oldParts)
+        {
+            if (Application.isPlaying)
+                Destroy(oldPart.gameObject);
+            else
+                DestroyImmediate(oldPart.gameObject);
+        }
+
+        BuildPlatformFloors();
+    }
+
+    private void UpdateCentralColumn()
+    {
+        if (towerRoot == null)
+            return;
+
+        Transform column = towerRoot.Find("Central Column");
+        if (column == null)
+            return;
+
+        column.localPosition = new Vector3(0f, (platformFloorCount - 1) * floorSpacing * 0.5f, 0f);
+        column.localScale = new Vector3(1.35f, platformFloorCount * floorSpacing * 0.5f + 1.4f, 1.35f);
+    }
+
+    private void RefreshPlayerStartPosition()
+    {
+        float topFloorY = (platformFloorCount - 1) * floorSpacing;
+        playerStart = new Vector3(0f, topFloorY + playerSpawnClearance, -playerOrbitRadius);
+    }
+
+    private static void ConfigurePlatformCollider(MeshCollider platformCollider)
+    {
+        MeshFilter meshFilter = platformCollider.GetComponent<MeshFilter>();
+        Mesh platformMesh = meshFilter != null ? meshFilter.sharedMesh : null;
+        if (platformMesh != null && platformCollider.sharedMesh != platformMesh)
+        {
+            platformCollider.sharedMesh = null;
+            platformCollider.sharedMesh = platformMesh;
+        }
+
+        platformCollider.convex = true;
+        platformCollider.isTrigger = false;
+        platformCollider.enabled = platformMesh != null;
     }
 
     private static Material CreateMaterial(Color color)
@@ -120,6 +372,16 @@ public sealed class GameSceneController : MonoBehaviour
         else if (material.HasProperty("_Color"))
             material.SetColor("_Color", color);
         return material;
+    }
+
+    private static PhysicsMaterial CreateBounceMaterial()
+    {
+        return new PhysicsMaterial("Helix Ball Bounce")
+        {
+            bounciness = 0.72f,
+            bounceCombine = PhysicsMaterialCombine.Maximum,
+            frictionCombine = PhysicsMaterialCombine.Minimum
+        };
     }
 
     private void CreateInterface()
@@ -149,39 +411,30 @@ public sealed class GameSceneController : MonoBehaviour
         }
 
         menuPanel = CreatePanel("Main Menu", safeAreaRect, PanelInk);
-        CreateText(menuPanel.transform, "HELIX 3D", new Vector2(0.5f, 0.72f), new Vector2(0f, 0f),
+        CreateText(menuPanel.transform, "HELIX JUMP", new Vector2(0.5f, 0.72f), new Vector2(0f, 0f),
             new Vector2(900f, 180f), 96, Accent, FontStyle.Bold);
-        CreateText(menuPanel.transform, "Desplázate en X y Z. Salta en Y.", new Vector2(0.5f, 0.58f), Vector2.zero,
+        CreateText(menuPanel.transform, "Gira la torre y guía el balón por los huecos.", new Vector2(0.5f, 0.58f), Vector2.zero,
             new Vector2(860f, 100f), 42, Paper, FontStyle.Normal);
         CreateButton(menuPanel.transform, "JUGAR", new Vector2(440f, 140f), new Vector2(0.5f, 0.43f),
             Vector2.zero, Accent, Ink, StartGame);
-        CreateText(menuPanel.transform, "Controles: botones táctiles o WASD / flechas + espacio",
-            new Vector2(0.5f, 0.25f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
+        bestFloorText = CreateText(menuPanel.transform, "RÉCORD: 0 pisos", new Vector2(0.5f, 0.32f),
+            Vector2.zero, new Vector2(800f, 80f), 38, Accent, FontStyle.Bold);
+        CreateText(menuPanel.transform, "Desliza horizontalmente · A / D en el Editor",
+            new Vector2(0.5f, 0.22f), Vector2.zero, new Vector2(920f, 90f), 30, Paper, FontStyle.Normal);
 
         gameplayPanel = new GameObject("Gameplay UI", typeof(RectTransform));
         RectTransform gameplayRect = gameplayPanel.GetComponent<RectTransform>();
         gameplayRect.SetParent(safeAreaRect, false);
         Stretch(gameplayRect);
-        CreateText(gameplayPanel.transform, "MOVER · X / Z                         SALTAR · Y",
+        CreateText(gameplayPanel.transform, "DESLIZA PARA GIRAR LA TORRE",
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
+        floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
+            new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
         CreateButton(gameplayPanel.transform, "MENÚ", new Vector2(180f, 116f), new Vector2(0f, 1f),
             new Vector2(105f, -70f), ButtonInk, Paper, ReturnToMenu);
-
-        CreateControl(gameplayPanel.transform, "X−", MobileControlAction.Left, new Vector2(70f, 210f));
-        CreateControl(gameplayPanel.transform, "X+", MobileControlAction.Right, new Vector2(330f, 210f));
-        CreateControl(gameplayPanel.transform, "Z+", MobileControlAction.Forward, new Vector2(200f, 340f));
-        CreateControl(gameplayPanel.transform, "Z−", MobileControlAction.Backward, new Vector2(200f, 70f));
-        CreateButton(gameplayPanel.transform, "SALTAR", new Vector2(230f, 230f), new Vector2(1f, 0f),
-            new Vector2(-140f, 140f), Accent, Ink, null, MobileControlAction.Jump, 34);
         gameplayPanel.SetActive(false);
 
         uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-    }
-
-    private void CreateControl(Transform parent, string label, MobileControlAction action, Vector2 position)
-    {
-        CreateButton(parent, label, new Vector2(140f, 140f), Vector2.zero, position,
-            ButtonInk, Paper, null, action, 38);
     }
 
     private GameObject CreatePanel(string name, Transform parent, Color color)
@@ -197,8 +450,7 @@ public sealed class GameSceneController : MonoBehaviour
     }
 
     private Button CreateButton(Transform parent, string label, Vector2 size, Vector2 anchor, Vector2 position,
-        Color background, Color foreground, UnityEngine.Events.UnityAction onClick,
-        MobileControlAction? controlAction = null, int fontSize = 44)
+        Color background, Color foreground, UnityEngine.Events.UnityAction onClick, int fontSize = 44)
     {
         GameObject buttonObject = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
@@ -223,9 +475,6 @@ public sealed class GameSceneController : MonoBehaviour
         button.colors = colors;
         if (onClick != null)
             button.onClick.AddListener(onClick);
-
-        if (controlAction.HasValue)
-            buttonObject.AddComponent<MobileControlButton>().Configure(mobileInput, controlAction.Value);
 
         GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
         RectTransform labelRect = labelObject.GetComponent<RectTransform>();
@@ -277,17 +526,23 @@ public sealed class GameSceneController : MonoBehaviour
     private void StartGame()
     {
         mobileInput.Clear();
+        progression.BeginRun();
+        foreach (FloorPassTrigger trigger in towerRoot.GetComponentsInChildren<FloorPassTrigger>(true))
+            trigger.ResetForRun();
         menuPanel.SetActive(false);
         gameplayPanel.SetActive(true);
         playerMovement.SetMovementEnabled(true);
+        towerRotation.SetRotationEnabled(true);
     }
 
     private void ReturnToMenu()
     {
         mobileInput.Clear();
+        progression.EndRun();
+        towerRotation.SetRotationEnabled(false);
+        towerRotation.ResetRotation();
         playerMovement.SetMovementEnabled(false);
-        playerBody.position = playerStart;
-        playerBody.linearVelocity = Vector3.zero;
+        playerMovement.ResetBall(playerStart);
         menuPanel.SetActive(true);
         gameplayPanel.SetActive(false);
     }
@@ -297,6 +552,7 @@ public sealed class GameSceneController : MonoBehaviour
         menuPanel.SetActive(true);
         gameplayPanel.SetActive(false);
         playerMovement.SetMovementEnabled(false);
+        towerRotation.SetRotationEnabled(false);
     }
 
     private static void Stretch(RectTransform rect)
