@@ -1,4 +1,4 @@
-# 🎮 Optativa: Diseño de Juegos II — Helix Jump
+# Optativa: Diseño de Juegos II — Helix Jump
 
 <p align="center">
   <img src="https://img.shields.io/badge/Unity-6000.6%2B-blue?logo=unity&logoColor=white" alt="Unity 6000.6 o superior" />
@@ -10,7 +10,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 ---
 
-## 👨‍🎓 Información del alumno y curso
+## Información del alumno y curso
 
 | Campo | Detalle |
 | :--- | :--- |
@@ -22,22 +22,42 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 ---
 
-## 🚀 Actividades
+## Actividades
 
-### 📍 Actividad 1: Base vertical, física y UI móvil
+### Actividad 1: Base vertical, física y UI móvil
 
 - **Descripción:** escena 3D vertical con torre segmentada y huecos, balón con Rigidbody y rebote, giro táctil de la torre, cámara que acompaña al balón únicamente en Y y menú adaptable a pantalla Portrait.
 - **Recursos:** prefab `HelixPartPrefab`, modelo y material derivados de `HelixPart.unitypackage`.
-- **Estado:** 🟡 Corrección vertical en revisión mediante el PR #3.
+- **Estado:** Completada. El PR #1 y su corrección en el PR #3 están fusionados.
 
-### 📍 Actividad 2: Progresión y persistencia
+### Actividad 2: Progresión y persistencia
 
 - **Descripción:** el HUD cuenta cada piso atravesado; la velocidad de caída aumenta suavemente hasta un límite configurable y el récord se guarda con `PlayerPrefs`.
-- **Estado:** 🟡 En revisión mediante el PR #2, actualizado para la mecánica vertical.
+- **Estado:** Completada. El PR #2 está fusionado.
+
+### Actividad 3: Generación continua y bucle de juego
+
+- **Descripción:** generación procedural o modular continua de plataformas, dificultad progresiva configurable desde el Inspector y reinicio del flujo al perder.
+- **Estado:** En diseño en la rama `actividad-3-niveles-procedurales`.
+
+### Actividad 4: Iluminación y personalización visual
+
+- **Descripción:** configuración de iluminación ambiental y direccional, color del entorno y apariencia del personaje.
+- **Estado:** Pendiente.
+
+### Actividad 5: Menús y transiciones entre niveles
+
+- **Descripción:** navegación por interfaces y cambio limpio entre al menos dos niveles mediante `SceneManager`.
+- **Estado:** Pendiente.
+
+### Actividad 6: Efectos y potenciadores
+
+- **Descripción:** efectos visuales y potenciador de velocidad con una estela temporal de hasta tres segundos.
+- **Estado:** Pendiente.
 
 ---
 
-## 🛠️ Tecnologías
+## Tecnologías
 
 - **Motor:** Unity 6.0.6 (6000.6.0f1)
 - **Lenguaje:** C#
@@ -49,7 +69,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 ---
 
-## 💻 Ejecutar el proyecto
+## Ejecutar el proyecto
 
 1. Instala Unity **6000.6.0f1** o una versión Unity 6 compatible.
 2. Abre la carpeta `My project` desde Unity Hub.
@@ -57,12 +77,3 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 4. En móvil, desliza horizontalmente para girar la torre. En el Editor usa **A/D** o las flechas.
 
 El repositorio excluye los directorios generados por Unity, como `Library`, `Temp` y `Logs`. `HelixPart.unitypackage` se conserva fuera de Git; solo se versionan los recursos importados necesarios para el proyecto.
-
----
-
-## 🌿 Flujo de trabajo
-
-- Una rama y un pull request por actividad.
-- Las ramas usan nombres descriptivos y no incluyen `codex`.
-- Los commits siguen Conventional Commits y se mantienen por debajo de 400 líneas cuando sea práctico.
-- Una actividad pasa a **Completada** cuando su pull request se cierra.
