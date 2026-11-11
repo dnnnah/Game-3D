@@ -29,6 +29,17 @@ public sealed class GameProgression : MonoBehaviour
         new DifficultyStep { floorsRequired = 12, fallSpeedCap = 20f, hazardSectorCount = 3 }
     };
 
+    [Header("Perfil de nivel 2")]
+    [SerializeField, Min(0f)] private float levelTwoInitialFallSpeed = 10.5f;
+    [SerializeField, Min(0f)] private float levelTwoFallSpeedIncrease = 0.55f;
+    [SerializeField, Min(0f)] private float levelTwoMaximumFallSpeed = 16.5f;
+    [SerializeField] private DifficultyStep[] levelTwoDifficultySteps =
+    {
+        new DifficultyStep { floorsRequired = 0, fallSpeedCap = 13f, hazardSectorCount = 0 },
+        new DifficultyStep { floorsRequired = 6, fallSpeedCap = 15f, hazardSectorCount = 1 },
+        new DifficultyStep { floorsRequired = 12, fallSpeedCap = 16.5f, hazardSectorCount = 2 }
+    };
+
     private PlayerMovement playerMovement;
     private Text floorCountLabel;
     private Text bestFloorLabel;
@@ -69,6 +80,17 @@ public sealed class GameProgression : MonoBehaviour
         bestFloors = Mathf.Max(0, PlayerPrefs.GetInt(BestFloorsKey, 0));
         UpdateFloorLabel();
         UpdateBestFloorLabel();
+    }
+
+    public void ConfigureLevelProfile(int sceneLevelNumber)
+    {
+        if (sceneLevelNumber != 2)
+            return;
+
+        initialMaximumFallSpeed = levelTwoInitialFallSpeed;
+        fallSpeedIncreasePerFloor = levelTwoFallSpeedIncrease;
+        maximumFallSpeed = levelTwoMaximumFallSpeed;
+        difficultySteps = levelTwoDifficultySteps;
     }
 
     public void BeginRun()

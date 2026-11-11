@@ -12,12 +12,11 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
     private Material platformMaterial;
     private Material accentMaterial;
     private Color hazardColor;
-    private int speedBoostEveryFloors;
+    private System.Action hazardCallback;
+    private int speedBoostIntervalFloors;
     private float speedBoostMultiplier;
     private float speedBoostDuration;
-    private float playerOrbitRadius;
     private Color speedBoostColor;
-    private System.Action hazardCallback;
     private int activeModuleCount;
     private int sectorsPerFloor;
     private int gapWidth;
@@ -36,9 +35,8 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
     public void Configure(GameObject prefab, Transform tower, Transform column, GameProgression gameProgression,
         int moduleCount, int sectorCount, int widthOfGap, int initialGapSector, int gapShift, float spacing,
         float angleOffsetPerFloor, float triggerDepth, Vector3 triggerSize, float columnPadding,
-        Material normalMaterial, Material accentMaterial, Color dangerColor,
-        int boostEveryFloors, float boostMultiplier, float boostDuration, float orbitRadius, Color boostColor,
-        System.Action onHazardContact)
+        Material normalMaterial, Material accentMaterial, Color dangerColor, System.Action onHazardContact,
+        int boostInterval, float boostMultiplier, float boostDuration, Color boostColor)
     {
         sectorPrefab = prefab;
         towerRoot = tower;
@@ -57,12 +55,11 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
         platformMaterial = normalMaterial;
         this.accentMaterial = accentMaterial;
         hazardColor = dangerColor;
-        speedBoostEveryFloors = Mathf.Max(0, boostEveryFloors);
+        hazardCallback = onHazardContact;
+        speedBoostIntervalFloors = Mathf.Max(0, boostInterval);
         speedBoostMultiplier = Mathf.Clamp(boostMultiplier, 1f, 3f);
         speedBoostDuration = Mathf.Clamp(boostDuration, 0.1f, 3f);
-        playerOrbitRadius = Mathf.Max(0.5f, orbitRadius);
         speedBoostColor = boostColor;
-        hazardCallback = onHazardContact;
     }
 
     public bool Initialize()
@@ -87,9 +84,8 @@ public sealed class ProceduralLevelGenerator : MonoBehaviour
             HelixFloorModule module = moduleObject.AddComponent<HelixFloorModule>();
             module.Initialize(towerRoot, sectorPrefab, sectorsPerFloor, gapWidth, firstGapSector, gapShiftPerFloor,
                 sectorAngleOffsetPerFloor, passTriggerDepth, passTriggerSize, progression,
-                platformMaterial, accentMaterial, hazardColor,
-                speedBoostEveryFloors, speedBoostMultiplier, speedBoostDuration, playerOrbitRadius, speedBoostColor,
-                OnFloorPassed, hazardCallback);
+                platformMaterial, accentMaterial, hazardColor, OnFloorPassed, hazardCallback,
+                speedBoostIntervalFloors, speedBoostMultiplier, speedBoostDuration, speedBoostColor);
             modules.Add(module);
         }
 

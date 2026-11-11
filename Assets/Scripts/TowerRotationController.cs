@@ -8,16 +8,22 @@ public sealed class TowerRotationController : MonoBehaviour
     [FormerlySerializedAs("maximumDegreesPerFrame")]
     [SerializeField, Min(0f), Tooltip("Rotación máxima aplicada en cada paso de física.")]
     private float maximumDegreesPerStep = 90f;
+    [SerializeField, Min(0.001f), Tooltip("Suavizado de la respuesta de la torre al arrastre táctil.")]
+    private float rotationSmoothTime = 0.055f;
 
     private MobileInputController input;
     private Rigidbody body;
     private bool rotationEnabled;
     private Quaternion startingRotation;
+    private float targetYaw;
+    private float currentYaw;
+    private float yawVelocity;
 
     private void Awake()
     {
         EnsurePhysicsSetup();
         startingRotation = body.rotation;
+        ResetYawState();
     }
 
     public void Configure(MobileInputController inputController)
@@ -25,6 +31,7 @@ public sealed class TowerRotationController : MonoBehaviour
         EnsurePhysicsSetup();
         input = inputController;
         startingRotation = body.rotation;
+        ResetYawState();
     }
 
     public void EnsurePhysicsSetup()
@@ -57,6 +64,7 @@ public sealed class TowerRotationController : MonoBehaviour
     {
         EnsurePhysicsSetup();
         body.rotation = startingRotation;
+        ResetYawState();
         input?.Clear();
         Physics.SyncTransforms();
     }
@@ -71,7 +79,17 @@ public sealed class TowerRotationController : MonoBehaviour
             return;
 
         float degrees = Mathf.Clamp(delta * degreesPerPixel, -maximumDegreesPerStep, maximumDegreesPerStep);
-        if (Mathf.Abs(degrees) > 0.001f)
-            body.MoveRotation(Quaternion.AngleAxis(-degrees, Vector3.up) * body.rotation);
+        targetYaw -= degrees;
+        float maximumSpeed = maximumDegreesPerStep / Mathf.Max(Time.fixedDeltaTime, 0.001f);
+        currentYaw = Mathf.SmoothDamp(currentYaw, targetYaw, ref yawVelocity,
+            rotationSmoothTime, maximumSpeed, Time.fixedDeltaTime);
+        body.MoveRotation(startingRotation * Quaternion.AngleAxis(currentYaw, Vector3.up));
+    }
+
+    private void ResetYawState()
+    {
+        targetYaw = 0f;
+        currentYaw = 0f;
+        yawVelocity = 0f;
     }
 }

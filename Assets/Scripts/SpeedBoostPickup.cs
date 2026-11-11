@@ -12,7 +12,6 @@ public sealed class SpeedBoostPickup : MonoBehaviour
     private Renderer pickupRenderer;
     private float speedMultiplier;
     private float boostDuration;
-    private Color pickupColor = Color.cyan;
     private bool available;
 
     private void Awake()
@@ -21,11 +20,11 @@ public sealed class SpeedBoostPickup : MonoBehaviour
         pickupCollider = GetComponent<SphereCollider>();
         pickupRenderer = GetComponent<Renderer>();
         pickupCollider.isTrigger = true;
-        pickupCollider.radius = 1f;
+        pickupCollider.radius = 0.6f;
     }
 
-    public void Configure(Vector3 localPosition, float visualDiameter, float multiplier, float duration, Color color,
-        bool isAvailable)
+    public void Configure(Vector3 localPosition, float visualDiameter, float multiplier, float duration,
+        Color color, bool isAvailable)
     {
         if (propertyBlock == null)
             propertyBlock = new MaterialPropertyBlock();
@@ -39,11 +38,11 @@ public sealed class SpeedBoostPickup : MonoBehaviour
         transform.localScale = Vector3.one * Mathf.Max(0.1f, visualDiameter);
         speedMultiplier = Mathf.Clamp(multiplier, 1f, 3f);
         boostDuration = Mathf.Clamp(duration, 0.1f, 3f);
-        pickupColor = color;
+
         if (pickupCollider != null)
         {
             pickupCollider.isTrigger = true;
-            pickupCollider.radius = 1f;
+            pickupCollider.radius = 0.6f;
         }
 
         if (pickupRenderer != null)
@@ -76,13 +75,13 @@ public sealed class SpeedBoostPickup : MonoBehaviour
         if (movement == null || !movement.ActivateSpeedBoost(speedMultiplier, boostDuration))
             return;
 
-        GameFeelEffects.PlayBurst(transform.position, pickupColor, 18);
         SetAvailable(false);
+        HelixParticleEffects.Burst(transform.position, new Color(0.12f, 0.95f, 1f, 1f), 12, 1f, 2f, 0.1f);
     }
 
     private void Update()
     {
         if (available)
-            transform.Rotate(0f, 90f * Time.deltaTime, 0f, Space.Self);
+            transform.Rotate(0f, 100f * Time.deltaTime, 0f, Space.Self);
     }
 }

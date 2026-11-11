@@ -44,32 +44,18 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 
 - **Descripción:** fondo configurable en ejecución, iluminación ambiental y direccional ajustable, bola personalizable y acento seguro rojo a juego con la bola.
 - **Especificación:** `docs/specs/SPEC-visual-management.md`.
-- **Estado:** PR #5 abierto para revisión en la rama `actividad-4-gestion-visual`.
+- **Estado:** Completada. El PR #5 está fusionado.
 
 ### Actividad 5: Menús y transiciones entre niveles
 
-- **Descripción:** menú principal conectado a tres niveles consecutivos (metas de 6, 8 y 12 pisos), carga asíncrona validada mediante `SceneManager` y opciones de reintento/regreso al menú.
+- **Descripción:** menú principal conectado a dos niveles consecutivos, carga asíncrona validada mediante `SceneManager` y opciones de reintento/regreso al menú.
 - **Especificación:** `docs/specs/SPEC-scene-flow.md`.
-- **Estado:** PR #6 abierto para revisión en la rama `actividad-5-navegacion-niveles`, encadenado al PR #5 de la actividad 4.
+- **Estado:** Completada. El PR #6 está fusionado.
 
 ### Actividad 6: Efectos y potenciadores
 
-- **Descripción:** potenciador de velocidad con estela cian, temporizador en el HUD y ráfagas de partículas al recogerlo y completar un nivel.
-- **Estado:** Implementado en el código; falta validar el recorrido en Play Mode y la compilación Android.
-
-## Entrega Android privada
-
-- **Nombre visible:** Helix 3D
-- **Identificador de paquete:** `dnnnah.udg`
-- **SDK mínimo:** Android API 26 (Android 8.0); el SDK objetivo se selecciona automáticamente.
-- **Arquitecturas:** ARMv7 y ARM64 en un solo APK.
-- **Backend:** IL2CPP
-- **Ícono:** marca roja y amarilla sobre fondo oscuro, con capas adaptativas de Android.
-- **Salida prevista:** `Builds/Android/Helix3D.apk` (el directorio `Builds/` está excluido de Git).
-
-Para preparar el entorno, instala desde Unity Hub **Android Build Support**, **Android SDK & NDK Tools** y **OpenJDK** para Unity 6000.6.0f1. En el Editor, usa **Tools > Helix Jump > Configure Android Player Settings** y después **Tools > Helix Jump > Build Android APK**.
-
-El APK se entrega directamente para revisión académica; no forma parte de una publicación en una tienda ni requiere una clave de firma de tienda. Para instalarlo en Android 8.0 o posterior, copia el APK al dispositivo, permite instalar aplicaciones desde la aplicación que lo abre y ejecútalo. La carga al buzón del curso y la retroalimentación en el foro a dos compañeros se realizan desde la cuenta académica del estudiante.
+- **Descripción:** control de torre suavizado, botones con iconos vectoriales, sectores rojos que se rompen y provocan la derrota, potenciador de velocidad con estela de hasta tres segundos y metas más largas con avisos de inicio y final. El nivel 2 usa una progresión más gradual.
+- **Estado:** Completada. El PR #7 está fusionado.
 
 ---
 
@@ -93,3 +79,7 @@ El APK se entrega directamente para revisión académica; no forma parte de una 
 4. En móvil, desliza horizontalmente para girar la torre. En el Editor usa **A/D** o las flechas.
 
 El repositorio excluye los directorios generados por Unity, como `Library`, `Temp` y `Logs`. `HelixPart.unitypackage` se conserva fuera de Git; solo se versionan los recursos importados necesarios para el proyecto.
+
+## Exportar para Android
+
+En Unity, ejecuta **Tools > Helix Jump > Configure Android Player Settings** y después **Tools > Helix Jump > Build Android APK**. El perfil usa el identificador `dnnnah.udg`, SDK mínimo 26, IL2CPP y ARMv7/ARM64. El APK se guarda en `Builds/Android/Helix3D.apk`.
