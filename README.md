@@ -55,7 +55,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 ### Actividad 6: Efectos y potenciadores
 
 - **Descripción:** control de torre suavizado, botones con iconos vectoriales, sectores rojos que se rompen y provocan la derrota, potenciador de velocidad con estela de hasta tres segundos y metas más largas con avisos de inicio y final. El nivel 2 usa una progresión más gradual.
-- **Estado:** En revisión en el PR #7, rama `actividad-6-efectos-fluidez-niveles`.
+- **Estado:** Completada. El PR #7 está fusionado.
 
 ---
 
@@ -79,3 +79,7 @@ Proyecto de videojuego tridimensional para la materia **Optativa: Diseño de Jue
 4. En móvil, desliza horizontalmente para girar la torre. En el Editor usa **A/D** o las flechas.
 
 El repositorio excluye los directorios generados por Unity, como `Library`, `Temp` y `Logs`. `HelixPart.unitypackage` se conserva fuera de Git; solo se versionan los recursos importados necesarios para el proyecto.
+
+## Exportar para Android
+
+En Unity, ejecuta **Tools > Helix Jump > Configure Android Player Settings** y después **Tools > Helix Jump > Build Android APK**. El perfil usa el identificador `dnnnah.udg`, SDK mínimo 26, IL2CPP y ARMv7/ARM64. El APK se guarda en `Builds/Android/Helix3D.apk`.
