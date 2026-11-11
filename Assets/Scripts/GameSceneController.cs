@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -38,6 +39,11 @@ public sealed class GameSceneController : MonoBehaviour
     [SerializeField] private Material columnMaterial;
     [SerializeField] private Material playerMaterial;
     [SerializeField] private PhysicsMaterial ballBounceMaterial;
+    [Header("Potenciador de velocidad")]
+    [SerializeField, Min(0)] private int speedBoostEveryFloors = 5;
+    [SerializeField, Range(1f, 3f)] private float speedBoostMultiplier = 1.8f;
+    [SerializeField, Range(0.1f, 3f)] private float speedBoostDuration = 2.5f;
+    [SerializeField] private Color speedBoostColor = new Color(0.12f, 0.95f, 1f, 1f);
     [Header("Iluminación y fondo")]
     [SerializeField] private Color backgroundColor = new Color(0.48f, 0.61f, 0.7f, 1f);
     [SerializeField] private Color ambientLightColor = new Color(0.3f, 0.36f, 0.44f);
@@ -77,15 +83,19 @@ public sealed class GameSceneController : MonoBehaviour
     private PlayerMovement playerMovement;
     private Text floorCountText;
     private Text bestFloorText;
+    private Text speedBoostText;
     private GameObject menuPanel;
     private GameObject gameplayPanel;
     private GameObject gameOverPanel;
+    private GameObject levelCompletePanel;
     private Text gameOverFloorText;
     private Text gameOverTitleText;
     private Font uiFont;
     private Vector3 playerStart;
     private MaterialPropertyBlock playerAppearanceBlock;
     private SceneTransitionController sceneTransition;
+    private Coroutine levelTransitionCoroutine;
+    private bool levelTransitionPending;
     [SerializeField] private ProceduralLevelGenerator levelGenerator;
     private RunState runState = RunState.Menu;
 
@@ -123,7 +133,9 @@ public sealed class GameSceneController : MonoBehaviour
         levelGenerator.Configure(helixPartPrefab, towerRoot, towerRoot.Find("Central Column"), progression,
             platformFloorCount, sectorsPerFloor, gapWidthSectors, firstGapSector, gapShiftPerFloor,
             floorSpacing, sectorRotationPerFloor, passTriggerDepth, passTriggerSize, columnEndPadding,
-            darkPlatformMaterial, safeAccentMaterial, hazardColor, EndRun);
+            darkPlatformMaterial, safeAccentMaterial, hazardColor,
+            speedBoostEveryFloors, speedBoostMultiplier, speedBoostDuration, playerOrbitRadius, speedBoostColor,
+            EndRun);
         levelGenerator.Initialize();
         if (!isMainMenuScene && autoStartLevel)
             StartGame();
@@ -223,8 +235,19 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void Update()
     {
+        bool showSpeedBoost = runState == RunState.Playing
+            && playerMovement != null && playerMovement.IsSpeedBoostActive;
+        if (speedBoostText != null)
+        {
+            if (speedBoostText.gameObject.activeSelf != showSpeedBoost)
+                speedBoostText.gameObject.SetActive(showSpeedBoost);
+            if (showSpeedBoost)
+                speedBoostText.text = $"IMPULSO · {playerMovement.SpeedBoostTimeRemaining:0.0} s";
+        }
+
         if (runState == RunState.Playing && floorsToCompleteLevel > 0
-            && progression != null && progression.FloorsPassed >= floorsToCompleteLevel)
+            && !levelTransitionPending && progression != null
+            && progression.FloorsPassed >= floorsToCompleteLevel)
             CompleteLevel();
     }
 
@@ -608,6 +631,10 @@ public sealed class GameSceneController : MonoBehaviour
             new Vector2(0.5f, 1f), new Vector2(0f, -56f), new Vector2(760f, 90f), 34, Paper, FontStyle.Bold);
         floorCountText = CreateText(gameplayPanel.transform, "PISOS: 0",
             new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(760f, 80f), 42, Accent, FontStyle.Bold);
+        speedBoostText = CreateText(gameplayPanel.transform, "IMPULSO · 0.0 s",
+            new Vector2(0.5f, 1f), new Vector2(0f, -208f), new Vector2(640f, 68f), 32,
+            speedBoostColor, FontStyle.Bold);
+        speedBoostText.gameObject.SetActive(false);
         if (levelNumber > 0)
             CreateText(gameplayPanel.transform, $"NIVEL {levelNumber}",
                 new Vector2(1f, 1f), new Vector2(-140f, -70f), new Vector2(250f, 72f), 32, Paper, FontStyle.Bold);
@@ -625,6 +652,13 @@ public sealed class GameSceneController : MonoBehaviour
         CreateButton(gameOverPanel.transform, "MENÚ", new Vector2(440f, 120f),
             new Vector2(0.5f, 0.29f), Vector2.zero, ButtonInk, Paper, ReturnToMenu);
         gameOverPanel.SetActive(false);
+
+        levelCompletePanel = CreatePanel("Level Transition", safeAreaRect, PanelInk);
+        CreateText(levelCompletePanel.transform, "¡NIVEL COMPLETADO!", new Vector2(0.5f, 0.56f),
+            Vector2.zero, new Vector2(940f, 180f), 76, Accent, FontStyle.Bold);
+        CreateText(levelCompletePanel.transform, "Preparando el siguiente nivel…", new Vector2(0.5f, 0.44f),
+            Vector2.zero, new Vector2(900f, 100f), 40, Paper, FontStyle.Normal);
+        levelCompletePanel.SetActive(false);
 
         uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
@@ -717,6 +751,7 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void StartGame()
     {
+        CancelLevelTransition();
         if (isMainMenuScene)
         {
             sceneTransition.LoadFirstLevel();
@@ -742,6 +777,7 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void ReturnToMenu()
     {
+        CancelLevelTransition();
         if (!isMainMenuScene)
         {
             mobileInput.Clear();
@@ -767,6 +803,7 @@ public sealed class GameSceneController : MonoBehaviour
 
     private void ShowMenu()
     {
+        CancelLevelTransition();
         runState = RunState.Menu;
         menuPanel.SetActive(true);
         gameplayPanel.SetActive(false);
@@ -791,6 +828,7 @@ public sealed class GameSceneController : MonoBehaviour
         gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
         gameplayPanel.SetActive(false);
         gameOverPanel.SetActive(true);
+        levelCompletePanel.SetActive(false);
     }
 
     private void CompleteLevel()
@@ -803,15 +841,51 @@ public sealed class GameSceneController : MonoBehaviour
         mobileInput.Clear();
         playerMovement.SetMovementEnabled(false);
         towerRotation.SetRotationEnabled(false);
+        GameFeelEffects.PlayBurst(playerTransform.position, Accent, 28);
 
-        if (!string.IsNullOrWhiteSpace(nextLevelSceneName)
-            && sceneTransition.LoadNextLevel(nextLevelSceneName))
+        if (!string.IsNullOrWhiteSpace(nextLevelSceneName))
+        {
+            levelTransitionPending = true;
+            gameplayPanel.SetActive(false);
+            levelCompletePanel.SetActive(true);
+            levelTransitionCoroutine = StartCoroutine(LoadNextLevelAfterFeedback());
             return;
+        }
 
         gameOverTitleText.text = "¡NIVEL COMPLETADO!";
         gameOverFloorText.text = $"PISOS: {progression.FloorsPassed}";
         gameplayPanel.SetActive(false);
         gameOverPanel.SetActive(true);
+        levelCompletePanel.SetActive(false);
+    }
+
+    private IEnumerator LoadNextLevelAfterFeedback()
+    {
+        yield return new WaitForSecondsRealtime(0.8f);
+        levelTransitionCoroutine = null;
+
+        if (sceneTransition != null && sceneTransition.LoadNextLevel(nextLevelSceneName))
+            yield break;
+
+        levelTransitionPending = false;
+        levelCompletePanel.SetActive(false);
+        gameOverTitleText.text = "NO SE PUDO CARGAR EL NIVEL";
+        gameOverFloorText.text = "Revisa la configuración de escenas.";
+        gameplayPanel.SetActive(false);
+        gameOverPanel.SetActive(true);
+    }
+
+    private void CancelLevelTransition()
+    {
+        if (levelTransitionCoroutine != null)
+        {
+            StopCoroutine(levelTransitionCoroutine);
+            levelTransitionCoroutine = null;
+        }
+
+        levelTransitionPending = false;
+        if (levelCompletePanel != null)
+            levelCompletePanel.SetActive(false);
     }
 
     private static void Stretch(RectTransform rect)

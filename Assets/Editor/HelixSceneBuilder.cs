@@ -11,6 +11,7 @@ public static class HelixSceneBuilder
     private const string MainScenePath = "Assets/Scenes/Main.unity";
     private const string LevelOneScenePath = "Assets/Scenes/Level1.unity";
     private const string LevelTwoScenePath = "Assets/Scenes/Level2.unity";
+    private const string LevelThreeScenePath = "Assets/Scenes/Level3.unity";
     private const string HelixPrefabPath = "Assets/Prefabs/HelixPartPrefab.prefab";
     private const string MaterialFolder = "Assets/Materials";
 
@@ -45,6 +46,16 @@ public static class HelixSceneBuilder
 
         if (scene.path != MainScenePath)
             return;
+
+        if (GameObject.Find("Helix Tower") != null)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(HelixPrefabPath);
+            if (prefab != null)
+                EnsureLevelScenes(prefab);
+            else
+                Debug.LogError($"No se encontró el prefab HelixPart en {HelixPrefabPath}.");
+            return;
+        }
 
         BuildScene(scene);
     }
@@ -122,36 +133,95 @@ public static class HelixSceneBuilder
 
     private static void EnsureLevelScenes(GameObject prefab)
     {
-        CreateLevelSceneIfMissing(LevelOneScenePath, prefab, 1, 6, "Level2");
-        CreateLevelSceneIfMissing(LevelTwoScenePath, prefab, 2, 8, string.Empty);
+        GameProgression.DifficultyStep[] levelOneSteps =
+        {
+            new GameProgression.DifficultyStep { floorsRequired = 0, fallSpeedCap = 15.2f, hazardSectorCount = 0 },
+            new GameProgression.DifficultyStep { floorsRequired = 4, fallSpeedCap = 18.4f, hazardSectorCount = 1 }
+        };
+        GameProgression.DifficultyStep[] levelTwoSteps =
+        {
+            new GameProgression.DifficultyStep { floorsRequired = 0, fallSpeedCap = 18f, hazardSectorCount = 1 },
+            new GameProgression.DifficultyStep { floorsRequired = 4, fallSpeedCap = 20f, hazardSectorCount = 2 }
+        };
+        GameProgression.DifficultyStep[] levelThreeSteps =
+        {
+            new GameProgression.DifficultyStep { floorsRequired = 0, fallSpeedCap = 20f, hazardSectorCount = 2 },
+            new GameProgression.DifficultyStep { floorsRequired = 4, fallSpeedCap = 22f, hazardSectorCount = 3 }
+        };
+
+        EnsureLevelScene(LevelOneScenePath, prefab, 1, 6, "Level2", 12f, 0.8f, 20f, 2.5f, levelOneSteps);
+        EnsureLevelScene(LevelTwoScenePath, prefab, 2, 8, "Level3", 13f, 0.9f, 22f, 2.5f, levelTwoSteps);
+        EnsureLevelScene(LevelThreeScenePath, prefab, 3, 12, string.Empty, 14f, 1f, 24f, 3f, levelThreeSteps);
 
         List<EditorBuildSettingsScene> buildScenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
         AddBuildSceneIfMissing(buildScenes, MainScenePath);
         AddBuildSceneIfMissing(buildScenes, LevelOneScenePath);
         AddBuildSceneIfMissing(buildScenes, LevelTwoScenePath);
+        AddBuildSceneIfMissing(buildScenes, LevelThreeScenePath);
         EditorBuildSettings.scenes = buildScenes.ToArray();
         AssetDatabase.SaveAssets();
     }
 
-    private static void CreateLevelSceneIfMissing(string scenePath, GameObject prefab, int levelNumber,
-        int floorsToComplete, string nextScene)
+    private static void EnsureLevelScene(string scenePath, GameObject prefab, int levelNumber,
+        int floorsToComplete, string nextScene, float initialSpeed, float increasePerFloor, float speedCap,
+        float changeRate, GameProgression.DifficultyStep[] steps)
     {
-        if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
-            return;
-
         Scene previousActiveScene = SceneManager.GetActiveScene();
-        Scene levelScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
-        SceneManager.SetActiveScene(levelScene);
+        Scene levelScene = default;
+        try
+        {
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
+                levelScene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            else
+                levelScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
 
-        GameObject session = new GameObject("Game Session");
-        GameSceneController controller = session.AddComponent<GameSceneController>();
-        controller.SetScenePrefab(prefab);
-        controller.ConfigureSceneFlow(false, true, levelNumber, floorsToComplete,
-            "Level1", nextScene, "Main");
-        EditorSceneManager.SaveScene(levelScene, scenePath);
-        EditorSceneManager.CloseScene(levelScene, true);
-        if (previousActiveScene.IsValid())
-            SceneManager.SetActiveScene(previousActiveScene);
+            SceneManager.SetActiveScene(levelScene);
+            GameObject session = null;
+            foreach (GameObject root in levelScene.GetRootGameObjects())
+            {
+                if (root.name == "Game Session")
+                {
+                    session = root;
+                    break;
+                }
+            }
+
+            if (session == null)
+                session = new GameObject("Game Session");
+            if (session.scene != levelScene)
+                SceneManager.MoveGameObjectToScene(session, levelScene);
+
+            GameSceneController controller = session.GetComponent<GameSceneController>();
+            if (controller == null)
+                controller = session.AddComponent<GameSceneController>();
+            controller.SetScenePrefab(prefab);
+            controller.ConfigureSceneFlow(false, true, levelNumber, floorsToComplete,
+                "Level1", nextScene, "Main");
+
+            GameProgression progression = session.GetComponent<GameProgression>();
+            if (progression == null)
+                progression = session.AddComponent<GameProgression>();
+            progression.ConfigureLevelDifficulty(initialSpeed, increasePerFloor, speedCap, changeRate, steps);
+            controller.SetProgression(progression);
+
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(progression);
+            EditorSceneManager.MarkSceneDirty(levelScene);
+            EditorSceneManager.SaveScene(levelScene, scenePath);
+        }
+        finally
+        {
+            try
+            {
+                if (levelScene.IsValid() && levelScene.isLoaded)
+                    EditorSceneManager.CloseScene(levelScene, true);
+            }
+            finally
+            {
+                if (previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+            }
+        }
     }
 
     private static void AddBuildSceneIfMissing(List<EditorBuildSettingsScene> buildScenes, string scenePath)

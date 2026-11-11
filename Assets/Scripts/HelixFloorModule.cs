@@ -14,6 +14,7 @@ public sealed class HelixFloorModule : MonoBehaviour
 
     private readonly List<SectorVisual> sectors = new List<SectorVisual>();
     private GameObject sectorPrefab;
+    private SpeedBoostPickup speedBoostPickup;
     private GameProgression progression;
     private Material platformMaterial;
     private Material accentMaterial;
@@ -28,6 +29,11 @@ public sealed class HelixFloorModule : MonoBehaviour
     private float sectorAngleOffsetPerFloor;
     private float triggerDepth;
     private Vector3 triggerSize;
+    private int speedBoostEveryFloors;
+    private float speedBoostMultiplier;
+    private float speedBoostDuration;
+    private float playerOrbitRadius;
+    private Color speedBoostColor;
     private float localHeight;
     private int floorIndex;
 
@@ -36,6 +42,7 @@ public sealed class HelixFloorModule : MonoBehaviour
     public void Initialize(Transform parent, GameObject prefab, int totalSectors, int widthOfGap,
         int initialGapSector, int gapShift, float angleOffsetPerFloor, float passTriggerDepth, Vector3 passTriggerSize,
         GameProgression gameProgression, Material normalMaterial, Material accentMaterial, Color dangerColor,
+        int boostEveryFloors, float boostMultiplier, float boostDuration, float orbitRadius, Color boostColor,
         Action<HelixFloorModule> onPassed, Action onHazard)
     {
         transform.SetParent(parent, false);
@@ -52,11 +59,17 @@ public sealed class HelixFloorModule : MonoBehaviour
         platformMaterial = normalMaterial;
         this.accentMaterial = accentMaterial;
         hazardColor = dangerColor;
+        speedBoostEveryFloors = Mathf.Max(0, boostEveryFloors);
+        speedBoostMultiplier = Mathf.Clamp(boostMultiplier, 1f, 3f);
+        speedBoostDuration = Mathf.Clamp(boostDuration, 0.1f, 3f);
+        playerOrbitRadius = Mathf.Max(0.5f, orbitRadius);
+        speedBoostColor = boostColor;
         passedCallback = onPassed;
         hazardCallback = onHazard;
 
         EnsureSectorInstances();
         EnsurePassTrigger();
+        EnsureSpeedBoostPickup();
     }
 
     public void ConfigureAt(float height, int logicalFloorIndex, int hazardSectorCount)
@@ -89,6 +102,14 @@ public sealed class HelixFloorModule : MonoBehaviour
             if (sector.Renderer != null)
                 sector.Renderer.sharedMaterial = sectorIndex == accentSector ? accentMaterial : platformMaterial;
             sector.Hazard.Configure(isHazard, hazardColor, hazardCallback);
+        }
+
+        if (speedBoostPickup != null)
+        {
+            bool floorHasBoost = speedBoostEveryFloors > 0
+                && (floorIndex + 1) % speedBoostEveryFloors == 0;
+            speedBoostPickup.Configure(new Vector3(0f, 0.55f, -playerOrbitRadius), 0.38f,
+                speedBoostMultiplier, speedBoostDuration, speedBoostColor, floorHasBoost);
         }
 
         if (passTrigger != null)
@@ -158,6 +179,19 @@ public sealed class HelixFloorModule : MonoBehaviour
         box.isTrigger = true;
         box.size = triggerSize;
         passTrigger = triggerTransform.GetComponent<FloorPassTrigger>();
+    }
+
+    private void EnsureSpeedBoostPickup()
+    {
+        if (speedBoostEveryFloors <= 0 || speedBoostPickup != null)
+            return;
+
+        GameObject pickupObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        pickupObject.name = "Speed Boost Pickup";
+        pickupObject.transform.SetParent(transform, false);
+        pickupObject.GetComponent<SphereCollider>().isTrigger = true;
+        speedBoostPickup = pickupObject.AddComponent<SpeedBoostPickup>();
+        speedBoostPickup.SetAvailable(false);
     }
 
     private static List<int> SelectHazardSlots(int seed, int count, int safeSlot, int hazardsToPlace)

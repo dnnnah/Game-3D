@@ -7,7 +7,7 @@ public sealed class GameProgression : MonoBehaviour
     private const string BestFloorsKey = "HELIX_JUMP_BEST_FLOORS";
 
     [Serializable]
-    private struct DifficultyStep
+    public struct DifficultyStep
     {
         [Min(0)] public int floorsRequired;
         [Min(0f)] public float fallSpeedCap;
@@ -41,6 +41,25 @@ public sealed class GameProgression : MonoBehaviour
 
     public int FloorsPassed => floorsPassed;
     public int HazardSectorsPerFloor => Mathf.Max(0, GetCurrentDifficultyStep().hazardSectorCount);
+
+    public void ConfigureLevelDifficulty(float initialSpeed, float increasePerFloor, float speedCap,
+        float changeRate, DifficultyStep[] steps)
+    {
+        initialMaximumFallSpeed = Mathf.Max(0f, initialSpeed);
+        fallSpeedIncreasePerFloor = Mathf.Max(0f, increasePerFloor);
+        maximumFallSpeed = Mathf.Max(initialMaximumFallSpeed, speedCap);
+        speedChangePerSecond = Mathf.Max(0f, changeRate);
+
+        difficultySteps = steps == null ? Array.Empty<DifficultyStep>() : (DifficultyStep[])steps.Clone();
+        for (int i = 0; i < difficultySteps.Length; i++)
+        {
+            DifficultyStep step = difficultySteps[i];
+            step.floorsRequired = Mathf.Max(0, step.floorsRequired);
+            step.fallSpeedCap = Mathf.Max(0f, step.fallSpeedCap);
+            step.hazardSectorCount = Mathf.Max(0, step.hazardSectorCount);
+            difficultySteps[i] = step;
+        }
+    }
 
     public void Configure(PlayerMovement movement, Text currentFloorText, Text bestFloorText)
     {
